@@ -1,0 +1,9 @@
+__pycache__/
+.DS_Store
+*.zip
+*_log.txt
+nmj_log.txt
+*_last.json
+*_presets.json
+update_seen.json
+.vscode/

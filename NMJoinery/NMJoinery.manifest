@@ -1,0 +1,11 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "id": "72EBD654-450E-49DA-9A8B-E68D2174E2A1",
+  "author": "NM Woodworks",
+  "description": {"": "CNC-aware finger, tab-and-slot and mortise-and-tenon joints as editable timeline features, plus a drawer maker, a cabinet maker and lay-flat copies for CAM."},
+  "version": "0.7.0",
+  "runOnStartup": true,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}

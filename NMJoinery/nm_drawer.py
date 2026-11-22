@@ -52,13 +52,79 @@ DEFAULTS = {
     'div_fb': 0, 'div_lr': 0, 'vt': '12 mm', 'vd': '6 mm', 'vdrop': '10 mm',
     'pull': 0, 'pw': '80 mm', 'pd': '25 mm', 'hl': '100 mm', 'hh': '30 mm', 'pz': '40 mm',
     'ff': False, 'ft': '18 mm', 'fs': '10 mm', 'ftop': '10 mm', 'fb': '10 mm', 'holes': 2, 'hd': '4.5 mm',
-    'flat': False, 'nd': 1, 'heights': 0, 'step': '25 mm', 'rev': '3 mm',
+    'flat': False, 'nd': 1, 'heights': 0, 'step': '25 mm', 'rev': '3 mm', 'units': 0,
 }
 DROPDOWNS = ('size', 'slide', 'spos', 'heights', 'layout', 'joints', 'relief', 'bottom', 'pull', 'holes')
 OPENING_KEYS = ('ow', 'oh', 'od', 'sg', 'sl', 'ot', 'ob')
 MARK_KEYS = ('sh', 'sline', 'sback')
 VALUE_KEYS = OPENING_KEYS + MARK_KEYS + ('w', 'd', 'h', 't', 'bt', 'gd', 'gh', 'vt', 'vd', 'vdrop', 'pw', 'pd', 'hl', 'hh', 'pz',
               'ft', 'fs', 'ftop', 'fb', 'hd', 'step', 'rev')
+
+# Units toggle (dialog only): plain sizes are shown in mm or inches. Formulas stay as they are. Fusion reads both, so
+# the parameters simply get what the dialog shows (e.g. "17.7165 in").
+UNITS = ['mm (metric)', 'inch (imperial)']
+UNITS_TIP = 'Show the sizes in mm or in inches. Switching converts every plain size in the dialog; you can ' \
+            'always type either (e.g. 450 mm or 17.75 in).'
+PLAIN = re.compile(r'^\s*[-+]?(\d+\.?\d*|\.\d+)\s*(mm|cm|m|in|inch|ft|")?\s*$')
+
+
+BARE = re.compile(r'^\s*([-+]?(?:\d+\.?\d*|\.\d+))\s*$')
+
+
+def dexpr(inputs, k):
+    """The text of size input k with its unit made explicit. The size inputs take the dialog's units (to_units
+    sets their unitType), so Fusion itself turns a typed "16" into "16 in" (Units = inch) or "16 mm"; a number
+    without a unit that still comes through follows the Units dropdown too."""
+    e = inputs.itemById(k).expression
+    m = BARE.match(e)
+    if m:
+        return m.group(1) + (' in' if inch(inputs) else ' mm')
+    return e
+
+
+def inch(inputs):
+    u = inputs.itemById('units')
+    return bool(u and u.selectedItem and u.selectedItem.index == 1)
+
+
+def fmt(v_mm, inches):
+    """A length in mm as dialog text: mm to 0.01, or inches to 0.0001 (exact when it is a multiple of 1/64)."""
+    if inches:
+        x = v_mm / 25.4
+        r = round(x * 64) / 64
+        x = r if abs(x - r) < 1e-6 else round(x, 4)
+        return ('%.6f' % x).rstrip('0').rstrip('.') + ' in'
+    return ('%.2f' % v_mm).rstrip('0').rstrip('.') + ' mm'
+
+
+def to_units(inputs, ids, memo):
+    """Shows every plain size among the value inputs ids in the dialog's units. memo remembers the text before a
+    switch, so switching back gives exactly what was there (when the value wasn't touched in between)."""
+    um = nm.design().unitsManager
+    inches = inch(inputs)
+    for k in ids:
+        inp = inputs.itemById(k)
+        if not inp:
+            continue
+        try:
+            inp.unitType = 'in' if inches else 'mm'       # a plain number typed from now on is in the dialog's units
+        except Exception:
+            pass
+        e = inp.expression
+        back = memo.get(k)
+        if back and back[0] == e:
+            new = back[1]
+        elif PLAIN.match(e):
+            try:
+                was = e + (' mm' if inches else ' in') if BARE.match(e) else e   # plain number: the old units
+                new = fmt(um.evaluateExpression(was, 'mm') * 10, inches)
+            except Exception:
+                continue
+        else:
+            continue
+        if new != e:
+            inp.expression = new
+            memo[k] = (new, e)
 # user parameter comments (Change Parameters)
 COMMENTS = {
     'ow': 'cabinet opening width', 'oh': 'cabinet opening height',
@@ -786,6 +852,9 @@ def fill_presets(dd, sel=PICK):
 
 def add_inputs(inputs, o):
     val = lambda ch, k, label: _tip(ch.addValueInput(k, label, 'mm', VI(o[k])))
+    memo.clear()
+    _dropdown(inputs, 'units', 'Units', UNITS, int(o.get('units', 0))).tooltip = UNITS_TIP
+    add_err(inputs)
     g = inputs.addGroupCommandInput('g_preset', 'Presets')
     g.isExpanded = bool(load_presets())
     c = g.children
@@ -855,6 +924,7 @@ def add_inputs(inputs, o):
     _tip(inputs.addBoolValueInput('flat', 'Lay flat', True, '', o['flat']))
     inputs.addTextBoxCommandInput('msg', '', '', 3, True)
     show(inputs)
+    to_units(inputs, VALUE_KEYS, memo)
     fit(inputs)
 
 
@@ -867,7 +937,7 @@ def fit(inputs, pick_length=False):
     sp = SLIDES[it('slide').selectedItem.index]
     um = nm.design().unitsManager
     try:
-        mm = {k: um.evaluateExpression(it(k).expression, 'mm') * 10 for k in OPENING_KEYS}
+        mm = {k: um.evaluateExpression(dexpr(inputs, k), 'mm') * 10 for k in OPENING_KEYS}
     except Exception:
         return
     if pick_length and sp.get('none') and abs(mm['sl'] - mm['od']) > 1e-6:
@@ -876,13 +946,13 @@ def fit(inputs, pick_length=False):
     if pick_length and 'lengths' in sp:
         fits = [L for L in sp['lengths'] if L <= mm['od'] + 1e-6]
         if fits and abs(fits[-1] - mm['sl']) > 1e-6:
-            it('sl').expression = '%d mm' % fits[-1]
+            it('sl').expression = fmt(fits[-1], inch(inputs))
             mm['sl'] = fits[-1]
     hh = mm['oh'] - mm['ot'] - mm['ob']
     if it('nd').value > 1:
         try:
-            o = {'nd': it('nd').value, 'oh': it('oh').expression, 'heights': it('heights').selectedItem.index,
-                 'step': it('step').expression}
+            o = {'nd': it('nd').value, 'oh': dexpr(inputs, 'oh'), 'heights': it('heights').selectedItem.index,
+                 'step': dexpr(inputs, 'step')}
             hs = [x - mm['ot'] - mm['ob'] for x in bank_slots(o)]
             hh = hs[0]
             note = 'Drawer boxes, top to bottom: %s mm high (Height shows the top one).' % ', '.join(
@@ -891,7 +961,7 @@ def fit(inputs, pick_length=False):
             pass
     for k, v in (('w', mm['ow'] - 2 * mm['sg']), ('h', hh), ('d', mm['sl'])):
         if abs(it(k).value * 10 - v) > 1e-6:
-            it(k).expression = '%g mm' % round(v, 4)
+            it(k).expression = fmt(v, inch(inputs))
 
 
 def apply(inputs, o):
@@ -911,6 +981,8 @@ def apply(inputs, o):
     it('g_pull').isExpanded = bool(o['pull'])
     it('g_ff').isExpanded = bool(o['ff'])
     it('g_open').isExpanded = bool(o['size'])
+    memo.clear()
+    to_units(inputs, VALUE_KEYS, memo)            # a preset saved in the other units
     fit(inputs)
 
 
@@ -998,19 +1070,41 @@ def read(inputs):
     for k in DROPDOWNS:
         o[k] = it(k).selectedItem.index
     for k in VALUE_KEYS:
-        o[k] = it(k).expression
+        o[k] = dexpr(inputs, k)
     o['div_fb'], o['div_lr'] = it('div_fb').value, it('div_lr').value
     o['nd'] = it('nd').value
     for k in ('top', 'ff', 'flat', 'marks'):
         o[k] = it(k).value
+    o['units'] = 1 if inch(inputs) else 0
     return o
+
+
+def _mm(e):
+    return nm.design().unitsManager.evaluateExpression(e, 'mm') * 10
+
+
+memo = {}           # units toggle: text before the last switch, per input
+
+
+def add_err(inputs):
+    """A red line at the top saying why OK is greyed out (the full message is at the bottom)."""
+    e = inputs.addTextBoxCommandInput('err', '', '', 2, True)
+    e.isFullWidth = True
+    e.isVisible = False
+
+
+def show_err(inputs, bad):
+    e = inputs.itemById('err')
+    if e:
+        e.formattedText = '<span style="color:#ff6b6b"><b>OK is off:</b> %s</span>' % bad[0] if bad else ''
+        e.isVisible = bool(bad)
 
 
 class Changed(adsk.core.InputChangedEventHandler):
     def notify(self, args):
-        global note
+        global note, applying
         try:
-            inputs = args.inputs
+            inputs = args.input.parentCommand.commandInputs   # args.inputs is only the group for grouped inputs
             if applying:
                 return
             if preset_event(inputs, args.input.id):
@@ -1018,28 +1112,37 @@ class Changed(adsk.core.InputChangedEventHandler):
                 return
             note = ''
             iid = args.input.id
+            if iid == 'units':
+                applying = True
+                try:
+                    to_units(inputs, VALUE_KEYS, memo)
+                finally:
+                    applying = False
+                show(inputs)
+                return
+            ins = inch(inputs)
             if iid == 'slide':
                 sp = SLIDES[args.input.selectedItem.index]
                 if sp['gap']:
-                    inputs.itemById('sg').expression = sp['gap']
-                    inputs.itemById('ob').expression = sp['below']
+                    inputs.itemById('sg').expression = fmt(_mm(sp['gap']), ins)
+                    inputs.itemById('ob').expression = fmt(_mm(sp['below']), ins)
                 if 'line' in sp:
-                    inputs.itemById('sline').expression = '%g mm' % sp['line']
-                    inputs.itemById('sh').expression = '%g mm' % sp['high']
-                    inputs.itemById('sback').expression = '%g mm' % sp['back']
+                    inputs.itemById('sline').expression = fmt(sp['line'], ins)
+                    inputs.itemById('sh').expression = fmt(sp['high'], ins)
+                    inputs.itemById('sback').expression = fmt(sp['back'], ins)
             if iid in OPENING_KEYS + ('size', 'slide', 'nd', 'heights', 'step'):
                 fit(inputs, pick_length=iid in ('od', 'slide', 'size'))
             if args.input.id == 'bottom':        # groove: a thin panel; fingers: the board thickness
                 um = nm.design().unitsManager
                 bt, t = inputs.itemById('bt'), inputs.itemById('t')
                 if args.input.selectedItem.index == 1 and abs(bt.value - t.value) < 1e-9:
-                    bt.expression = '6 mm'
+                    bt.expression = fmt(6, ins)
                 elif args.input.selectedItem.index == 0:
                     bt.expression = t.expression
             elif args.input.id == 'vstock':
                 e = VSTOCK[args.input.selectedItem.index][1]
                 if e:
-                    inputs.itemById('vt').expression = e
+                    inputs.itemById('vt').expression = fmt(_mm(e), ins)
             elif args.input.id == 'vt':
                 i = vstock_index(args.input.expression)
                 dd = inputs.itemById('vstock')
@@ -1056,10 +1159,12 @@ class Validate(adsk.core.ValidateInputsEventHandler):
             bad = check(read(args.inputs))
             args.areInputsValid = not bad
             args.inputs.itemById('msg').formattedText = '<br>'.join(bad + ([note] if note else []))
+            show_err(args.inputs, bad)
         except Exception:
             args.areInputsValid = False
             try:
                 args.inputs.itemById('msg').formattedText = 'A value is not a valid size (use e.g. 450 mm).'
+                show_err(args.inputs, ['a value is not a valid size (use e.g. 450 mm or 17.75 in).'])
             except Exception:
                 pass
 
@@ -1073,10 +1178,8 @@ class Execute(adsk.core.CommandEventHandler):
                 nm.ui.messageBox('\n'.join(bad), 'NM Drawer')
                 return
             save_last(o)
-            if o['size'] == 1 and int(o['nd']) > 1:
-                build_bank(o)
-            else:
-                build(o)
+            import nm_edit
+            nm_edit.made('drawer', o)           # builds it + the timeline item to edit it later
         except Exception:
             nm.log('drawer failed:\n' + traceback.format_exc())
             nm.ui.messageBox('NM Drawer failed:\n' + traceback.format_exc())
@@ -1086,6 +1189,7 @@ class Created(adsk.core.CommandCreatedEventHandler):
     def notify(self, args):
         try:
             cmd = args.command
+            cmd.isExecutedWhenPreEmpted = False      # starting another command = Cancel, not OK (an auto-OK mid-build crashed Fusion)
             cmd.setDialogInitialSize(380, 640)
             global note
             note = ''

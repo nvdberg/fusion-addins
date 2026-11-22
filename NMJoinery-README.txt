@@ -1,16 +1,27 @@
-NM Joinery - Fusion add-in (version 0.7.0)
+NM Joinery - Fusion add-in (version 0.8.0)
 ==========================================
 CNC-aware box finger joints, tab & slot and mortise & tenon joints.
 Each joint is an editable feature in the timeline: double-click it to change it.
 
 INSTALL (Mac or Windows)
+Easiest: double-click "Install on Mac.command" or "Install on Windows.cmd" (next to this file).
+It copies the add-in into Fusion's own add-in folder; restart Fusion and it starts by itself.
+(The first time, a Mac may say the file is from the internet: System Settings > Privacy &
+Security > Open Anyway. Windows: More info > Run anyway.)
+Or without the zip, one line in Terminal (Mac) or PowerShell (Windows):
+  curl -fsSL https://raw.githubusercontent.com/nvdberg/fusion-addins/main/install-mac.sh | bash
+  irm https://raw.githubusercontent.com/nvdberg/fusion-addins/main/install-windows.ps1 | iex
+Illustrated guide: https://nvdberg.github.io/fusion-addins/
+
+By hand instead:
 1. Unzip. You get a folder called "NMJoinery". Put it somewhere it can stay
    (for example Documents/Fusion Add-Ins/NMJoinery).
 2. In Fusion: Utilities tab > ADD-INS > Scripts and Add-Ins (or press Shift+S).
-3. Open the "Add-Ins" tab, click the "+" (green plus) and choose the NMJoinery folder.
-4. Select "NMJoinery" in the list, click Run, and tick "Run on Startup".
-   New buttons: "NM Joint" under SOLID > MODIFY, "NM Drawer", "NM Cabinet" and "NM Lay Flat"
-   under SOLID > CREATE.
+3. Click "+" > "Script or add-in from device" and choose the NMJoinery folder.
+   (Older Fusion: the "Add-Ins" tab, green plus.)
+4. Switch its Run toggle on and tick "Run on Startup".
+New buttons: "NM Joint" under SOLID > MODIFY; "NM Lay Flat", "NM Drawer", "NM Cabinet" and
+"NM Cut List" under SOLID > CREATE.
 
 USE
 - SOLID > MODIFY > NM Joint. Select 2 or more boards (solid bodies).
@@ -27,6 +38,10 @@ NM DRAWER (SOLID > CREATE > NM Drawer)
 - Bottom: between the 4 walls, or a loose panel in a groove.
 - Joints: finger joints (CNC), or None = plain panels that butt against each other, to join with a
   Domino, dowels or screws (no CNC needed). The sizes are the same either way.
+- Units (top of the dialog, also in NM Cabinet): mm or inches. A plain number you type is in
+  these units (Units = inch: 16 means 16"); type the unit to use the other one (300mm or 17.75 in).
+  Switching converts every plain size. Parameters keep what the dialog shows.
+- OK greyed out? The red line under Units says why (e.g. a size too small for the boards).
 - Options: a top (closed box), dividers in dados, a finger pull or hand hole in the front,
   a false front with screw holes, and "Lay flat" (see below).
 - Dividers: any number front-to-back and/or left-to-right (a sorting grid). Where they cross they
@@ -63,13 +78,22 @@ NM DRAWER (SOLID > CREATE > NM Drawer)
 - Every size becomes a design parameter with the box's name in front (e.g. drawer_w, drawer_h,
   drawer_t). Change them in Modify > Change Parameters and the whole box, joints included, follows.
 
-NM CABINET (SOLID > CREATE > NM Cabinet)  - new in 0.7.0, first version
+NM CABINET (SOLID > CREATE > NM Cabinet)
 - One dialog builds a whole frameless cabinet: sides, bottom, top, back, base and what goes inside,
   with tab joints between the carcass boards and the back in a groove.
-- Joints: tab joints (CNC), or None = plain panels for a Domino, dowels or screws: sides full
-  height, bottom / top / shelves / kick board between them. The drawers follow the same choice.
+- Joints: tab joints (CNC), or None = plain panels for a Domino, dowels or screws. With None the
+  top (or the stretchers) sits on top of the sides and the bottom under them, both full width, so
+  a load on top rests on the sides, not on the joints. (With a toe kick notched into the sides,
+  the sides run to the floor and the bottom stays between them.) Shelves and the kick board sit
+  between the sides. The drawers follow the same choice.
 - Base: toe kick notched into the sides, a separate plinth, or none (wall cabinet, legs).
 - Top: a full panel, or two stretchers (front and back) to go under a counter top.
+- Back: a thin panel (1/4" ply) in a groove, set in from the back edge; or a solid board
+  (default the board thickness) between the sides, top and bottom, flush with the back edges,
+  tabbed in with tab joints. With stretchers, the back stretcher then sits on the solid back.
+- Hanging rails (grooved back, optional): two rails inside at the back, one under the top and
+  one on the bottom, board thickness, flush with the back edge, for screwing the cabinet to the
+  wall. The grooved back then sits right in front of them. Rail height in the dialog (90 mm).
 - Sections (1 to 4, top to bottom), with a fixed shelf between them. Each one holds:
     Drawers       a bank of drawers (NM Drawer) with Lee Valley slides (default), another
                   side-mount slide, or no slides. Heights all the same or graduated.
@@ -86,9 +110,32 @@ NM CABINET (SOLID > CREATE > NM Cabinet)  - new in 0.7.0, first version
 - Not yet: hinge holes, face frame, wooden runners for drawers without slides.
 
 NM LAY FLAT (SOLID > CREATE > NM Lay Flat)
-- Pick boards: you get a copy of each one laid flat, inside face up, long side along X,
-  in a new component next to the model. Use that component for CAM.
-- The copies follow every size change of the boards. Double-click the feature to change the spacing.
+- Pick boards, or whole components (a cabinet, a drawer): you get a copy of each board laid flat,
+  inside face up, long side along X, in a new component next to the model. Use that component for CAM.
+- Layout "In a row": the boards one after the other.
+- Layout "Nested on sheets": the boards are packed on sheets, one row of sheets per thickness.
+  - Sheet: 4 x 8 ft, 5 x 5 ft Baltic birch, 4 x 4 ft, 2 x 4 ft, 2440 x 1220, 2500 x 1250 mm, or Custom size.
+  - Bit: the spacing becomes the bit diameter + 2 mm (1/4" bit -> 8.35 mm). Pick "Minimum distance"
+    (or just type in Spacing) to set your own distance.
+  - Edge margin: kept free along every sheet edge (default 10 mm).
+  - Turn boards 90 deg: off = the long side (grain) stays along the sheet length.
+  - Leftovers first: pieces you have lying around, used before new sheets, e.g.
+    600 x 900; 450 x 1200 x 18   (length x width [x thickness], plain numbers are mm, 24 in x 30 in works).
+    Without a thickness a piece can take boards of any thickness (once).
+  - Each sheet / leftover is a see-through body "Sheet 1 - 18 mm" under the boards: in CAM pick it as
+    stock (Setup > Stock > From solid). Outlines count as rectangles (fingers included).
+- The copies follow every size change of the boards (re-nested). Double-click the feature to change
+  the layout, sheet, bit, leftovers or spacing.
+
+NM CUT LIST (SOLID > CREATE > NM Cut List)
+- A list of every board: part names, quantity, length x width x thickness. Boards of the same
+  size in the same component are counted together (Left, Right x 2).
+- Pick a cabinet, a drawer or single boards, or nothing for the whole design. Hidden boards
+  and Lay Flat copies are left out.
+- The size is the blank you cut: fingers and tabs included, length = the longest side.
+- Units mm or inch (inch to the nearest 1/32"). Per thickness: the total area and a rough
+  sheet count (4 x 8 ft or 5 x 5 ft; area + 15 %, not a nesting).
+- Save CSV writes it as a file for Excel, Numbers or Google Sheets.
 
 CLEARANCE (how tight the joint is)
 - Gap = clearance per side, default 0.1 mm.
@@ -101,10 +148,15 @@ CLEARANCE (how tight the joint is)
 
 UPDATES
 A while after Fusion starts, the add-in looks on GitHub for a newer version
-(github.com/nvdberg/fusion-addins/releases). If there is one, it asks once whether to open the
-download page. Only the public release list is read, nothing is sent, no account needed.
-To update: Scripts and Add-Ins > NMJoinery > Stop, replace the NMJoinery folder with the new one
-from the zip, then Run.
+(github.com/nvdberg/fusion-addins/releases). If there is one it asks:
+  Yes = install it now (downloads it, replaces its own files, keeps your presets and last
+        settings), then restart Fusion.   No = skip this version.   Cancel = ask next time.
+Only the public releases are read, nothing is sent, no account needed.
+This works when the add-in was put in by the installer (Fusion's own add-in folder). Added by
+hand from another folder: it offers the download page instead; run the installer from the new
+zip, or Stop, copy the new files over the old ones (keep nm_drawer_presets.json), and Run.
 
 REMOVE
-Scripts and Add-Ins > Add-Ins > NMJoinery > Stop, then untick Run on Startup or remove it from the list.
+Scripts and Add-Ins > NMJoinery > Run off, untick Run on Startup. Then quit Fusion and delete the
+NMJoinery folder (installer: Mac ~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/AddIns,
+Windows %APPDATA%\Autodesk\Autodesk Fusion 360\API\AddIns).

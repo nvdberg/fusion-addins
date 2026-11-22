@@ -34,9 +34,11 @@ feature. The full notes are in `NMJoinery-README.txt` and `RotaryUnwrap-README.t
 
 ## Updates
 
-A while after Fusion starts, each add-in looks here for a newer release and asks once whether
-to open the download page. It only reads the public release list; nothing is sent and no
-account is needed. To update: quit Fusion and run the install line again.
+A while after Fusion starts, each add-in looks here for a newer release. If there is one it asks
+whether to install it: **Yes** downloads it and replaces its own files (your presets and settings
+stay), then restart Fusion. This works from NMJoinery 0.8.0 / RotaryUnwrap 0.1.2 on, when the add-in
+was put in by the installer. It only reads the public releases; nothing is sent and no account is
+needed. Running the install line again always works too.
 
 ## Note
 

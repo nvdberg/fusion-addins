@@ -1048,6 +1048,7 @@ class CreateCreated(adsk.core.CommandCreatedEventHandler):
             for k in ('mode', 'auto', 'shown', 'orig', 'orig_auto', 'busy', 'view', 'over', 'orig_over', 'shared', 'jmodes'):
                 edit_state.pop(k, None)           # new joints: every setting, 0 = auto as typed
             cmd = args.command
+            cmd.isExecutedWhenPreEmpted = False      # starting another command = Cancel, not OK (an auto-OK mid-build crashed Fusion)
             cmd.setDialogInitialSize(380, 560)
             try:
                 ensure_globals(design())
@@ -1194,6 +1195,7 @@ class EditCreated(adsk.core.CommandCreatedEventHandler):
             for k in ('view', 'over', 'orig_over', 'shared', 'jmodes'):
                 edit_state.pop(k, None)
             cmd = args.command
+            cmd.isExecutedWhenPreEmpted = False      # starting another command = Cancel, not OK (an auto-OK mid-build crashed Fusion)
             cmd.setDialogInitialSize(380, 560)
             if edit_state['mode'] == 'box':
                 boards = group_boards(cf)
@@ -1379,7 +1381,7 @@ def run(context):
         if panel and not panel.controls.itemById(CREATE_ID):
             ctl = panel.controls.addCommand(c)
             ctl.isPromoted = True
-        for mname in ('nm_flat', 'nm_drawer', 'nm_cabinet'):  # own modules; a failure there must not stop NM Joint
+        for mname in ('nm_flat', 'nm_drawer', 'nm_cabinet', 'nm_edit', 'nm_cutlist'):  # own modules; a failure there must not stop NM Joint
             try:
                 mod = importlib.reload(importlib.import_module(mname))
                 mod.register(sys.modules[__name__])
@@ -1414,7 +1416,7 @@ def stop(context):
         nmj_update.stop_('NMJoinery')
     except Exception:
         log(traceback.format_exc())
-    for mname in ('nm_cabinet', 'nm_drawer', 'nm_flat'):
+    for mname in ('nm_cutlist', 'nm_edit', 'nm_cabinet', 'nm_drawer', 'nm_flat'):
         try:
             importlib.import_module(mname).unregister(sys.modules[__name__])
         except Exception:

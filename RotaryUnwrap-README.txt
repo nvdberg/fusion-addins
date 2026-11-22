@@ -1,13 +1,21 @@
-Rotary Unwrap - Fusion add-in (version 0.1.1)
+Rotary Unwrap - Fusion add-in (version 0.1.2)
 =============================================
 Fusion's real rotary toolpaths need the paid Machining Extension. This is the free way round:
 draw/model the round part, flatten it, make normal 3-axis toolpaths on the flat strip,
 post with your normal post, then wrap the program onto the rotary with wrap_y_to_a.py.
 
 INSTALL (Mac or Windows)
+Easiest: double-click "Install on Mac.command" or "Install on Windows.cmd" (next to this file).
+It copies the add-in into Fusion's own add-in folder; restart Fusion and it starts by itself.
+(The first time, a Mac may say the file is from the internet: System Settings > Privacy &
+Security > Open Anyway. Windows: More info > Run anyway.)
+Or on a Mac without the zip, in Terminal:
+  curl -fsSL https://raw.githubusercontent.com/nvdberg/fusion-addins/main/install-mac.sh | bash -s RotaryUnwrap
+By hand instead:
 1. Unzip. Put the "RotaryUnwrap" folder somewhere it can stay.
-2. In Fusion: Shift+S (Scripts and Add-Ins) > Add-Ins tab > "+" > choose the RotaryUnwrap folder.
-3. Select it, click Run, tick "Run on Startup". The button "Flatten for Rotary" appears
+2. In Fusion: Shift+S (Scripts and Add-Ins) > "+" > "Script or add-in from device" > choose the
+   RotaryUnwrap folder. (Older Fusion: Add-Ins tab, green plus.)
+3. Switch its Run toggle on and tick "Run on Startup". The button "Flatten for Rotary" appears
    under SOLID > MODIFY.
 
 USE
@@ -27,8 +35,10 @@ ALWAYS air-cut a new file first and check it in a G-code viewer. No warranty.
 
 UPDATES
 A while after Fusion starts, the add-in looks on GitHub for a newer version
-(github.com/nvdberg/fusion-addins/releases). If there is one, it asks once whether to open the
-download page. Only the public release list is read, nothing is sent, no account needed.
+(github.com/nvdberg/fusion-addins/releases). If there is one it asks: Yes = install it now
+(then restart Fusion), No = skip this version, Cancel = ask next time. One-click install works
+when the add-in was put in by the installer; otherwise it offers the download page.
+Only the public releases are read, nothing is sent, no account needed.
 
 REMOVE
 Scripts and Add-Ins > Add-Ins > RotaryUnwrap > Stop, then untick Run on Startup or remove it.

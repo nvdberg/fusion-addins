@@ -4,7 +4,7 @@
   "id": "5B1C7E2A-9F3D-4C61-8E0A-2D7B4F9A1C35",
   "author": "NM Woodworks",
   "description": {"": "Flatten for Rotary: unroll a round part into a flat strip for 3-axis toolpaths + wrap_y_to_a.py."},
-  "version": "0.1.1",
+  "version": "0.1.2",
   "runOnStartup": true,
   "supportedOS": "windows|mac",
   "editEnabled": true

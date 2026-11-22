@@ -195,7 +195,7 @@ as one editable item in the timeline.</p>
 <figure class="dlg"><img src="img/02_drawer_dialog.png" alt="NM Drawer dialog in mm, 600 x 400 x 300 mm, 12 mm boards, two dividers"><figcaption>NM Drawer: a 600 × 400 × 300 mm box, 12 mm boards, 2 dividers.</figcaption></figure>
 <div class="txt">
 <table class="f">
-<tr><td>Units</td><td>mm or inch. Switching converts every size; you can always type either (<code>450 mm</code> or <code>17.75 in</code>).</td></tr>
+<tr><td>Units</td><td>mm or inch. A plain number you type is in these units (Units = inch: <code>16</code> means 16"); type the unit for the other one (<code>300mm</code>, <code>17.75 in</code>). Switching converts every size. If OK is greyed out, the red line under Units says why.</td></tr>
 <tr><td>Presets</td><td>Type a name under <i>Save as</i> and Save, to keep the whole setup ("Kitchen drawer"). Pick it next time to fill in every field.</td></tr>
 <tr><td>Size from</td><td><b>Box outside sizes</b>, or <b>Cabinet opening + slides</b>: type the opening and pick the slides; the box is worked out for you.</td></tr>
 <tr><td>Name</td><td>Used in front of every parameter (<code>drawer_w</code>, <code>drawer_h</code> …).</td></tr>
@@ -326,14 +326,15 @@ parameter with the name in front: <code>cabinet_w</code>, <code>cabinet_h</code>
 <h2>Update, remove &amp; tips</h2>
 
 <h3>When there's a new version</h3>
-<p>A while after Fusion starts, NMJoinery checks the public release list on GitHub. If there is a newer version it asks <b>once</b> whether to open the download page.</p>
+<p>A while after Fusion starts, NMJoinery checks the public release list on GitHub. If there is a newer version it asks:</p>
 <ol class="steps">
-<li><b>Quit Fusion.</b></li>
-<li><b>Run the install line again</b> (Terminal on a Mac, PowerShell on Windows, see <i>Install</i>), or double-click the installer in the new zip.
-Your drawer presets and last-used settings are kept.</li>
-<li><b>Start Fusion.</b> Scripts and Add-Ins shows the new version number.</li>
+<li><b>Yes</b> = install it now. It downloads the new version and replaces its own files (a few seconds); your drawer presets and last-used settings are kept.
+<b>No</b> = skip this version. <b>Cancel</b> = ask again next time.</li>
+<li><b>Restart Fusion</b> when it says "installed". Scripts and Add-Ins then shows the new version number.</li>
 </ol>
-<p>Installed by hand? Stop NMJoinery, copy the new files over the old ones in your folder (keep <code>nm_drawer_presets.json</code>), and Run it again.</p>
+<div class="note info"><b>One-click updates need version 0.8.0 or newer, put in by the installer</b> (Fusion's own add-in folder).
+Added by hand from another folder? Then the notice opens the download page instead: run the installer from the new zip, or copy the new files over the old ones
+(keep <code>nm_drawer_presets.json</code>). Running the install line again always works too.</div>
 
 <h3>Remove</h3>
 <p>Scripts and Add-Ins › NMJoinery › switch Run off and untick Run on Startup. Then quit Fusion and delete the <code>NMJoinery</code> folder: on a Mac in <code>~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/AddIns</code>, on Windows in <code>%APPDATA%\Autodesk\Autodesk Fusion 360\API\AddIns</code> (or wherever you put it by hand).</p>
@@ -342,7 +343,7 @@ Your drawer presets and last-used settings are kept.</li>
 <div class="cards">
 <div class="card"><h4>One dialog at a time</h4>Finish an NM dialog with OK or Cancel before you start something else. Starting another command cancels it.</div>
 <div class="card"><h4>0 = automatic</h4>Finger count, width, tab length …: leave 0 and the add-in picks a size that suits the board and the bit.</div>
-<div class="card"><h4>mm or inch</h4>Type sizes in either unit in any field. The Units dropdown only changes what the dialog shows.</div>
+<div class="card"><h4>mm or inch</h4>A plain number follows the Units dropdown (inch: <code>16</code> = 16"). Add a unit to use the other one: <code>300mm</code> or <code>11.8 in</code>.</div>
 <div class="card"><h4>Air-cut first</h4>Free to use, no warranty. Cut a test joint and air-cut a new program before cutting real stock.</div>
 </div>
 </div>

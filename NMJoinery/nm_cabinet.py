@@ -15,6 +15,7 @@ CUT = adsk.fusion.FeatureOperations.CutFeatureOperation
 DOORS = ['Auto (two when wider than 600 mm)', 'One', 'Two']
 BASES = ['Toe kick notched in the sides', 'Separate plinth', 'None (flat bottom: wall cabinet, legs)']
 TOPS = ['Full top panel', 'Two stretchers (under a counter top)']
+BACKS = ['Thin panel in a groove (set in)', 'Solid, flush with the back edges']
 KINDS = ['Drawers', 'Doors', 'Open shelves']
 MAX_SECTIONS = 4
 
@@ -24,13 +25,14 @@ SECTION = {'kind': 0, 'sh': '200 mm', 'nd': 3, 'heights': 1, 'step': '25 mm', 's
 DEFAULTS = {
     'name': 'Cabinet', 'w': '600 mm', 'h': '870 mm', 'd': '560 mm', 't': '18 mm',
     'bk': '6 mm', 'bgd': '6 mm', 'bin': '10 mm', 'base': 0, 'kh': '100 mm', 'kd': '75 mm', 'top': 0, 'sw': '100 mm',
-    'rev': '3 mm', 'ft': '18 mm', 'joints': 0, 'relief': 1, 'flat': True, 'ns': 1,
+    'rev': '3 mm', 'ft': '18 mm', 'joints': 0, 'relief': 1, 'flat': True, 'ns': 1, 'units': 0, 'bstyle': 0,
+    'rails': False, 'nh': '90 mm',
     'sections': [dict(SECTION) for _ in range(MAX_SECTIONS)],
 }
 COMMENTS = {
     'w': 'outside width', 'h': 'outside height (floor to top, base included)', 'd': 'outside depth (sides)',
     't': 'carcass board thickness', 'bk': 'back panel thickness', 'bgd': 'back groove depth',
-    'bin': 'back panel set in from the back edge', 'gg': 'groove clearance per side', 'ge': 'room at panel edges',
+    'bin': 'back panel set in from the back edge', 'nh': 'hanging rail height (rails behind the back panel)', 'gg': 'groove clearance per side', 'ge': 'room at panel edges',
     'rev': 'gap between fronts (doors / drawer fronts)', 'ft': 'front thickness (doors / drawer fronts)',
     'kh': 'toe kick / plinth height', 'kd': 'toe kick / plinth set back from the front', 'sw': 'stretcher width',
     'z0': 'inside bottom (top of the bottom panel)', 'z1': 'inside top (underside of the top)',
@@ -61,7 +63,7 @@ def geom(o):
     t = v(o['t'])
     g = {'t': t, 'w': v(o['w']), 'h': v(o['h']), 'd': v(o['d'])}
     g['iw'] = g['w'] - 2 * t
-    g['id'] = g['d'] - v(o['bin']) - v(o['bk'])
+    g['id'] = g['d'] - v(o['bk']) - (0 if int(o.get('bstyle', 0)) else t if rails(o) else v(o['bin']))
     g['z0'] = (v(o['kh']) if o['base'] in (0, 1) else 0) + t
     g['z1'] = g['h'] - t
     secs = sections(o)
@@ -71,6 +73,11 @@ def geom(o):
     g['s'] = s
     g['b'] = [g['z0'] + sum(s[j] + t for j in range(k + 1, n)) for k in range(n)]
     return g
+
+
+def rails(o):
+    """Hanging rails at the back (grooved back only): the back panel sits right in front of them."""
+    return not int(o.get('bstyle', 0)) and bool(o.get('rails'))
 
 
 def slide_length(sp, depth, fallback):
@@ -139,10 +146,13 @@ def check(o):
         return ['Sizes and thicknesses must be more than 0.']
     if g['iw'] < 100 or g['id'] < 100:
         out.append('The cabinet is too small inside (less than 100 mm wide or deep).')
-    if not (1.5 <= v(o['bgd']) < t - 3):
+    solid = int(o.get('bstyle', 0)) == 1
+    if not solid and not (1.5 <= v(o['bgd']) < t - 3):
         out.append('Back groove depth must be between 1.5 mm and the board thickness minus 3 mm.')
-    if v(o['bin']) < 0:
+    if not solid and v(o['bin']) < 0:
         out.append('Back set in must be 0 or more.')
+    if rails(o) and not (30 <= v(o['nh']) <= (g['z1'] - g['z0']) / 2 - 10):
+        out.append('Hanging rails: at least 30 mm high, and less than half the inside height.')
     if o['base'] in (0, 1) and (v(o['kh']) < 20 or v(o['kd']) < 0 or v(o['kd']) + 2 * t > g['d'] - 50):
         out.append('Toe kick / plinth: height at least 20 mm, set back 0 or more and well under the depth.')
     if o['top'] == 1 and not (30 <= v(o['sw']) < g['id'] / 2):
@@ -181,13 +191,17 @@ def build(o):
     secs = sections(o)
     n = len(secs)
     base, top = int(o['base']), int(o['top'])
-    params = [(k, o[k]) for k in ('w', 'h', 'd', 't', 'bk', 'bgd', 'bin', 'rev', 'ft')]
-    params += [('gg', 'nmj_gap'), ('ge', '1 mm')]
+    solid = int(o.get('bstyle', 0)) == 1          # solid back, flush at the back: no groove, no set-in
+    rl = rails(o)
+    params = [(k, o[k]) for k in ('w', 'h', 'd', 't', 'bk') + (() if solid else ('bgd',)) + ('rev', 'ft')]
+    if not solid:                               # with hanging rails the back sits right in front of them
+        params += [('bin', '{t}' if rl else o['bin'])] + ([('nh', o['nh'])] if rl else [])
+    params += ([] if solid else [('gg', 'nmj_gap')]) + [('ge', '1 mm')]
     if base in (0, 1):
         params += [('kh', o['kh']), ('kd', o['kd'])]
     if top == 1:
         params.append(('sw', o['sw']))
-    params += [('z0', '{kh} + {t}' if base in (0, 1) else '{t}'), ('z1', '{h} - {t}'), ('id', '{d} - {bin} - {bk}')]
+    params += [('z0', '{kh} + {t}' if base in (0, 1) else '{t}'), ('z1', '{h} - {t}'), ('id', '{d} - {bk}' if solid else '{d} - {bin} - {bk}')]
     for i, sct in enumerate(secs[:-1], 1):
         params.append(('s%d' % i, sct['sh']))
     params.append(('s%d' % n, '{z1} - {z0}' + ''.join(' - {s%d}' % j for j in range(1, n)) +
@@ -207,17 +221,32 @@ def build(o):
     comp = occ.component
     comp.name = o['name']
     m = dr.Maker(comp, P)
-    zs = '{kh}' if base == 1 else '0'
-    sides = [m.box('Left', '0', '0', '{t}', '{d}', zs, '{h}'), m.box('Right', '{w} - {t}', '0', '{w}', '{d}', zs, '{h}')]
+    butt = int(o['joints']) == 1
+    # Joints None: the top (or the stretchers) sits on the sides and the bottom under them, full width, so a load on
+    # top bears on the sides, not on the screws / Dominos. Toe kick in the sides: those sides run to the floor, so the
+    # bottom stays between them there.
+    over_b = butt and base != 0
+    zs = '{z0}' if over_b else '{kh}' if base == 1 else '0'
+    ze = '{z1}' if butt else '{h}'
+    bx0, bx1 = ('0', '{w}') if over_b else ('{t}', '{w} - {t}')
+    tx0, tx1 = ('0', '{w}') if butt else ('{t}', '{w} - {t}')
+    sides = [m.box('Left', '0', '0', '{t}', '{d}', zs, ze), m.box('Right', '{w} - {t}', '0', '{w}', '{d}', zs, ze)]
     if base == 0:
         m.box('Toe kick notch', '-1 mm', '-1 mm', '{w} + 1 mm', '{kd}', '-1 mm', '{kh}', CUT, sides)
     jointed = list(sides)
-    jointed.append(m.box('Bottom', '{t}', '0', '{w} - {t}', '{d}', '{z0} - {t}', '{z0}'))
+    jointed.append(m.box('Bottom', bx0, '0', bx1, '{d}', '{z0} - {t}', '{z0}'))
     if top == 0:
-        jointed.append(m.box('Top', '{t}', '0', '{w} - {t}', '{d}', '{z1}', '{h}'))
+        jointed.append(m.box('Top', tx0, '0', tx1, '{d}', '{z1}', '{h}'))
     else:
-        jointed.append(m.box('Front stretcher', '{t}', '0', '{w} - {t}', '{sw}', '{z1}', '{h}'))
-        jointed.append(m.box('Back stretcher', '{t}', '{id} - {sw}', '{w} - {t}', '{id}', '{z1}', '{h}'))
+        jointed.append(m.box('Front stretcher', tx0, '0', tx1, '{sw}', '{z1}', '{h}'))
+        by = '{d}' if solid else '{id}'           # solid back: the back stretcher sits on it, flush at the back
+        jointed.append(m.box('Back stretcher', tx0, by + ' - {sw}', tx1, by, '{z1}', '{h}'))
+    if solid:                                   # between the sides, top and bottom; back face flush with the sides
+        jointed.append(m.box('Back', '{t}', '{id}', '{w} - {t}', '{d}', '{z0}', '{z1}'))
+    if rl:                                      # hanging / nailing rails behind the back panel, flush at the back
+        rt = '{h}' if top == 1 and not butt else '{z1}'
+        jointed.append(m.box('Top rail', '{t}', '{d} - {bin}', '{w} - {t}', '{d}', rt + ' - {nh}', rt))
+        jointed.append(m.box('Bottom rail', '{t}', '{d} - {bin}', '{w} - {t}', '{d}', '{z0}', '{z0} + {nh}'))
     for k in range(1, n):                      # fixed shelf under section k, between it and the next one
         jointed.append(m.box('Fixed shelf %d' % k, '{t}', '0', '{w} - {t}', '{id} - {ge}', '{b%d} - {t}' % k, '{b%d}' % k))
     loose = []
@@ -234,11 +263,12 @@ def build(o):
         jointed.append(m.box('Toe kick', '{t}', '{kd}', '{w} - {t}', '{kd} + {t}', '0', '{kh}'))
     exprs = dict(nm.DEFAULT_EXPR)
     exprs['relief'] = str(int(o['relief']))
-    butt = int(o['joints']) == 1
     if not butt:
         made, lines = nm.create_all([b.createForAssemblyContext(occ) for b in jointed], exprs)
     else:                                       # plain panels: Domino, dowels, screws
-        lines = ['No joints cut: the boards butt against each other (join them with Dominos, dowels or screws)']
+        lines = ['No joints cut: the boards butt against each other (join them with Dominos, dowels or screws); '
+                 'the %s on top of the sides%s' % ('top sits' if top == 0 else 'stretchers sit',
+                                                   ', the bottom under them' if over_b else '')]
     if base == 1:
         plinth = [m.box('Plinth front', '0', '{kd}', '{w}', '{kd} + {t}', '0', '{kh}'),
                   m.box('Plinth back', '0', '{d} - {t}', '{w}', '{d}', '0', '{kh}'),
@@ -248,11 +278,12 @@ def build(o):
             made2, lines2 = nm.create_all([b.createForAssemblyContext(occ) for b in plinth], exprs)
             lines += lines2
     body = m.body
-    grooved = [body('Left'), body('Right'), body('Bottom')] + ([body('Top')] if top == 0 else [])
-    m.box('Back groove', '{t} - {bgd}', '{id} - {gg}', '{w} - {t} + {bgd}', '{id} + {bk} + {gg}', '{z0} - {bgd}',
-          '{z1} + {bgd}' if top == 0 else '{h} + 1 mm', CUT, grooved)
-    m.box('Back', '{t} - {bgd} + {ge}', '{id}', '{w} - {t} + {bgd} - {ge}', '{id} + {bk}', '{z0} - {bgd} + {ge}',
-          '{z1} + {bgd} - {ge}' if top == 0 else '{h}')
+    if not solid:
+        grooved = [body('Left'), body('Right'), body('Bottom')] + ([body('Top')] if top == 0 else [])
+        m.box('Back groove', '{t} - {bgd}', '{id} - {gg}', '{w} - {t} + {bgd}', '{id} + {bk} + {gg}', '{z0} - {bgd}',
+              '{z1} + {bgd}' if top == 0 else '{h} + 1 mm', CUT, grooved)
+        m.box('Back', '{t} - {bgd} + {ge}', '{id}', '{w} - {t} + {bgd} - {ge}', '{id} + {bk}', '{z0} - {bgd} + {ge}',
+              '{z1} + {bgd} - {ge}' if top == 0 else '{h}')
     for k, j, z in loose:
         m.box('Shelf %d.%d' % (k, j), '{t} + {ge}', '{ge}', '{w} - {t} - {ge}', '{id} - {ge}', z, '%s + {t}' % z)
     for k, sct in enumerate(secs, 1):           # shelf pin holes where a section has loose shelves
@@ -270,9 +301,10 @@ def build(o):
             m.box('Door %d left' % k, '{rev} / 2', '-{ft}', '{w} / 2 - {rev} / 2', '0', z0, z1)
             m.box('Door %d right' % k, '{w} / 2 + {rev} / 2', '-{ft}', '{w} - {rev} / 2', '0', z0, z1)
     lines.insert(0, '%s: parameters %s* (Modify > Change Parameters)' % (o['name'], P))
-    lines.insert(1, 'Outside %g x %g x %g mm, %g mm boards; inside %g wide x %g deep; %s; %s'
+    lines.insert(1, 'Outside %g x %g x %g mm, %g mm boards; inside %g wide x %g deep; %s; %s; %s back'
                  % (g['w'], g['h'], g['d'], g['t'], g['iw'], g['id'], BASES[base].split(' (')[0].lower(),
-                    TOPS[top].split(' (')[0].lower()))
+                    TOPS[top].split(' (')[0].lower(), 'solid flush' if solid else
+                    'grooved (hanging rails behind it)' if rl else 'grooved'))
     for k, sct in enumerate(secs):
         extra = ''
         if sct['kind'] == 1:
@@ -349,7 +381,12 @@ TIPS = {
     'kh': 'Toe kick / plinth height.', 'kd': 'How far the toe kick / plinth front is set back from the front edge.',
     'top': 'Full panel, or two stretchers (front and back) when a counter top goes on top.',
     'sw': 'Width of each stretcher (front to back).',
-    'bk': 'Back panel thickness (1/4" ply is 6 mm).', 'bgd': 'How deep the back groove goes into the sides, top '
+    'bstyle': 'A thin panel (1/4" ply) slid into a groove, set in from the back edge; or a solid board between '
+              'the sides, top and bottom, its back face flush with the back edges (tabbed in with tab joints).',
+    'rails': 'Two hanging / nailing rails at the back, inside: one under the top, one on the bottom, board '
+             'thickness, flush with the back edge. The grooved back sits right in front of them.',
+    'nh': 'Height of each hanging rail.',
+    'bk': 'Back panel thickness (1/4" ply is 6 mm; a solid back is usually the board thickness).', 'bgd': 'How deep the back groove goes into the sides, top '
     'and bottom.', 'bin': 'Back groove set in from the back edge (room to scribe to the wall).',
     'ft': 'Thickness of the doors and drawer fronts.', 'rev': 'Gap between neighbouring doors / drawer fronts. '
     'Fronts cover the carcass edges except half of it at the outside.',
@@ -369,7 +406,7 @@ SEC_TIPS = {
     'dn': 'One or two doors.',
 }
 DEFAULT_PRESET = '(NM Drawer defaults)'
-VALUE_KEYS = ('w', 'h', 'd', 't', 'kh', 'kd', 'sw', 'bk', 'bgd', 'bin', 'ft', 'rev')
+VALUE_KEYS = ('w', 'h', 'd', 't', 'kh', 'kd', 'sw', 'bk', 'bgd', 'bin', 'nh', 'ft', 'rev')
 note = ''
 
 
@@ -412,6 +449,9 @@ def _dropdown(ch, iid, label, names, sel, tip=None):
 
 def add_inputs(inputs, o):
     val = lambda ch, k, label: _tip(ch.addValueInput(k, label, 'mm', VI(o[k])))
+    memo.clear()
+    drw()._dropdown(inputs, 'units', 'Units', drw().UNITS, int(o.get('units', 0))).tooltip = drw().UNITS_TIP
+    drw().add_err(inputs)
     g = inputs.addGroupCommandInput('g_cab', 'Cabinet')
     c = g.children
     _tip(c.addStringValueInput('name', 'Name', o['name']))
@@ -427,11 +467,14 @@ def add_inputs(inputs, o):
     _dropdown(c, 'top', 'Top', TOPS, o['top'])
     val(c, 'sw', 'Stretcher width')
     g = inputs.addGroupCommandInput('g_back', 'Back and fronts')
-    g.isExpanded = False
+    g.isExpanded = bool(int(o.get('bstyle', 0)))
     c = g.children
+    _dropdown(c, 'bstyle', 'Back', BACKS, int(o.get('bstyle', 0)))
     val(c, 'bk', 'Back thick')
     val(c, 'bgd', 'Groove depth')
     val(c, 'bin', 'Set in')
+    _tip(c.addBoolValueInput('rails', 'Hanging rails', True, '', bool(o.get('rails'))))
+    val(c, 'nh', 'Rail height')
     val(c, 'ft', 'Front thick')
     val(c, 'rev', 'Gap between')
     _tip(inputs.addIntegerSpinnerCommandInput('ns', 'Sections', 1, MAX_SECTIONS, 1, int(o['ns'])))
@@ -455,23 +498,26 @@ def add_inputs(inputs, o):
         _tip(c.addBoolValueInput('adj%d' % i, 'Adjustable', True, '', bool(s['adj'])), tip('adj'))
     _tip(inputs.addBoolValueInput('flat', 'Lay flat', True, '', o['flat']))
     inputs.addTextBoxCommandInput('msg', '', '', 4, True)
+    drw().to_units(inputs, unit_ids(), memo)
     show(inputs)
 
 
 def read(inputs):
     it = inputs.itemById
     o = {'name': it('name').value.strip() or 'Cabinet'}
-    for k in ('joints', 'relief', 'base', 'top'):
+    for k in ('joints', 'relief', 'base', 'top', 'bstyle'):
         o[k] = it(k).selectedItem.index
     for k in VALUE_KEYS:
-        o[k] = it(k).expression
+        o[k] = drw().dexpr(inputs, k)
     o['ns'], o['flat'] = it('ns').value, it('flat').value
+    o['units'] = 1 if drw().inch(inputs) else 0
+    o['rails'] = it('rails').value
     o['sections'] = []
     for i in range(1, MAX_SECTIONS + 1):
         dp = it('dp%d' % i).selectedItem.name
-        o['sections'].append({'kind': it('k%d' % i).selectedItem.index, 'sh': it('sh%d' % i).expression,
+        o['sections'].append({'kind': it('k%d' % i).selectedItem.index, 'sh': drw().dexpr(inputs, 'sh%d' % i),
                               'nd': it('nd%d' % i).value, 'heights': it('ht%d' % i).selectedItem.index,
-                              'step': it('st%d' % i).expression, 'slide': it('sl%d' % i).selectedItem.index,
+                              'step': drw().dexpr(inputs, 'st%d' % i), 'slide': it('sl%d' % i).selectedItem.index,
                               'dpreset': '' if dp == DEFAULT_PRESET else dp, 'ndoor': it('dn%d' % i).selectedItem.index,
                               'nsh': it('nsh%d' % i).value, 'adj': it('adj%d' % i).value})
     return o
@@ -482,6 +528,10 @@ def show(inputs):
     base, top, ns = it('base').selectedItem.index, it('top').selectedItem.index, it('ns').value
     it('kh').isVisible = it('kd').isVisible = base in (0, 1)
     it('sw').isVisible = top == 1
+    groove = it('bstyle').selectedItem.index == 0
+    it('bgd').isVisible = it('rails').isVisible = groove
+    it('bin').isVisible = groove and not it('rails').value       # rails: the back sits right in front of them
+    it('nh').isVisible = groove and it('rails').value
     it('relief').isVisible = it('joints').selectedItem.index == 0
     for i in range(1, MAX_SECTIONS + 1):
         it('g_s%d' % i).isVisible = i <= ns
@@ -496,16 +546,32 @@ def show(inputs):
         it('adj%d' % i).isVisible = kind in (1, 2) and it('nsh%d' % i).value > 0
     try:                                        # the last section: show the height it gets
         g = geom(read(inputs))
-        it('sh%d' % ns).expression = '%g mm' % round(g['s'][-1], 2)
+        it('sh%d' % ns).expression = drw().fmt(g['s'][-1], drw().inch(inputs))
     except Exception:
         pass
+
+
+memo = {}           # units toggle: text before the last switch, per input
+
+
+def unit_ids():
+    return VALUE_KEYS + tuple('%s%d' % (k, i) for i in range(1, MAX_SECTIONS + 1) for k in ('sh', 'st'))
 
 
 class Changed(adsk.core.InputChangedEventHandler):
     def notify(self, args):
         try:
+            inputs = args.input.parentCommand.commandInputs   # args.inputs is only the group for grouped inputs
+            if args.input.id == 'units':
+                drw().to_units(inputs, unit_ids(), memo)
+            if args.input.id == 'bstyle':          # solid back: board thickness; groove: 1/4" ply
+                bk, t = inputs.itemById('bk'), inputs.itemById('t')
+                if args.input.selectedItem.index == 1 and bk.value < t.value - 1e-9:
+                    bk.expression = t.expression
+                elif args.input.selectedItem.index == 0 and abs(bk.value - t.value) < 1e-9:
+                    bk.expression = drw().fmt(6, drw().inch(inputs))
             if not re.match(r'sh\d$', args.input.id) or args.input.isEnabled:
-                show(args.inputs)
+                show(inputs)
         except Exception:
             nm.log('cabinet dialog:\n' + traceback.format_exc())
 
@@ -516,10 +582,12 @@ class Validate(adsk.core.ValidateInputsEventHandler):
             bad = check(read(args.inputs))
             args.areInputsValid = not bad
             args.inputs.itemById('msg').formattedText = '<br>'.join(bad)
+            drw().show_err(args.inputs, bad)
         except Exception:
             args.areInputsValid = False
             try:
                 args.inputs.itemById('msg').formattedText = 'A value is not a valid size (use e.g. 600 mm).'
+                drw().show_err(args.inputs, ['a value is not a valid size (use e.g. 600 mm or 23.5 in).'])
             except Exception:
                 pass
 
@@ -533,7 +601,8 @@ class Execute(adsk.core.CommandEventHandler):
                 nm.ui.messageBox('\n'.join(bad), 'NM Cabinet')
                 return
             save_last(o)
-            build(o)
+            import nm_edit
+            nm_edit.made('cabinet', o)          # builds it + the timeline item to edit it later
         except Exception:
             nm.log('cabinet failed:\n' + traceback.format_exc())
             nm.ui.messageBox('NM Cabinet failed:\n' + traceback.format_exc())
@@ -543,6 +612,7 @@ class Created(adsk.core.CommandCreatedEventHandler):
     def notify(self, args):
         try:
             cmd = args.command
+            cmd.isExecutedWhenPreEmpted = False      # starting another command = Cancel, not OK (an auto-OK mid-build crashed Fusion)
             cmd.setDialogInitialSize(380, 680)
             add_inputs(cmd.commandInputs, load_last())
             for ev, h in ((cmd.execute, Execute()), (cmd.inputChanged, Changed()), (cmd.validateInputs, Validate())):

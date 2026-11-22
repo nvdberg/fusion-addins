@@ -7,24 +7,36 @@ Two free add-ins for Autodesk Fusion, made for a hobby CNC router.
 | **NMJoinery** | Finger joints, tab & slot and mortise & tenon between boards, as editable timeline features with dogbones / T-bones for your bit. Also **NM Drawer** (a whole drawer or bank of drawers in one dialog), **NM Cabinet** (a whole frameless cabinet with drawers, doors and shelves) and **NM Lay Flat** (flat copies of the boards for CAM). | Solid > Modify > NM Joint; Solid > Create |
 | **RotaryUnwrap** | Flatten for Rotary: unrolls a round part into a flat strip for normal 3-axis toolpaths, plus `wrap_y_to_a.py` that turns the posted program into rotary (A-axis) moves. Made for an Avid CNC rotary with Mach4. | Solid > Modify > Flatten for Rotary |
 
-## Download
-
-Get the zip from **[Releases](https://github.com/nvdberg/fusion-addins/releases)** (under *Assets*),
-not the green Code button.
-
 ## Install (Mac or Windows)
 
-1. Unzip and put the add-in folder (`NMJoinery` or `RotaryUnwrap`) somewhere it can stay.
-2. In Fusion press **Shift+S** > **Add-Ins** tab > **+** > pick that folder.
-3. Select it, click **Run**, tick **Run on Startup**.
+One line downloads the newest version into Fusion's own add-in folder. Fusion then starts it by itself.
+Run the same line again to update; your presets and last settings are kept.
 
-The full notes are in `NMJoinery-README.txt` and `RotaryUnwrap-README.txt` (also in each zip).
+**Mac** (Terminal):
+```
+curl -fsSL https://raw.githubusercontent.com/nvdberg/fusion-addins/main/install-mac.sh | bash
+```
+
+**Windows** (PowerShell):
+```
+irm https://raw.githubusercontent.com/nvdberg/fusion-addins/main/install-windows.ps1 | iex
+```
+
+Then restart Fusion. For RotaryUnwrap put its name after the Mac line (`... | bash -s RotaryUnwrap`).
+
+Rather not use a terminal? Get the zip from **[Releases](https://github.com/nvdberg/fusion-addins/releases)**
+(under *Assets*, not the green Code button), unzip it and double-click **Install on Mac.command** or
+**Install on Windows.cmd**. By hand: Shift+S > **+** > *Script or add-in from device* > pick the
+add-in folder, then switch **Run** on and tick **Run on Startup**.
+
+**[The illustrated guide](https://nvdberg.github.io/fusion-addins/)** shows every step and every NMJoinery
+feature. The full notes are in `NMJoinery-README.txt` and `RotaryUnwrap-README.txt` (also in each zip).
 
 ## Updates
 
 A while after Fusion starts, each add-in looks here for a newer release and asks once whether
 to open the download page. It only reads the public release list; nothing is sent and no
-account is needed. To update: Stop the add-in, replace its folder with the new one, Run.
+account is needed. To update: quit Fusion and run the install line again.
 
 ## Note
 

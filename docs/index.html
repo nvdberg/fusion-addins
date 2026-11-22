@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NMJoinery Guide</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Barlow+Condensed:wght@700;900&family=Barlow:wght@400;500;600;700&display=swap');
+:root{--bg:#0a0c0f;--surface:#10131a;--panel:#151922;--border:#1e2535;--text:#c8d4e8;--dim:#5a6678;
+--red:#f43f5e;--yellow:#fbbf24;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--blue:#38bdf8;--white:#e2e8f0}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;font-size:15px;line-height:1.6;padding:20px 16px 60px}
+.page{max-width:1000px;margin:0 auto}
+header{border-bottom:2px solid var(--border);padding-bottom:12px;margin-bottom:18px}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:clamp(28px,5vw,44px);font-weight:900;color:#fff;line-height:1.1}
+h1 em{font-style:normal;color:var(--yellow)}
+.sub{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:2px;margin-top:6px;text-transform:uppercase}
+h2{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:#fff;margin:6px 0 4px}
+h3{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin:22px 0 8px}
+p{margin:0 0 10px}
+.lead{color:var(--white);font-size:16px;margin-bottom:14px}
+a{color:var(--blue)}
+code,.k{font-family:'IBM Plex Mono',monospace;font-size:12.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px;color:var(--white)}
+.k{color:var(--yellow);background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.25);white-space:nowrap}
+
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab{padding:9px 14px;border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);cursor:pointer;transition:color .2s,border-color .2s;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.pane{display:none}
+.tab-radio{position:absolute;opacity:0;pointer-events:none}
+#tab-install:checked~#pane-install,#tab-joint:checked~#pane-joint,#tab-drawer:checked~#pane-drawer,
+#tab-cabinet:checked~#pane-cabinet,#tab-edit:checked~#pane-edit,#tab-flat:checked~#pane-flat,
+#tab-cut:checked~#pane-cut,#tab-more:checked~#pane-more{display:block}
+#tab-install:checked~.tabs label[for="tab-install"],#tab-joint:checked~.tabs label[for="tab-joint"],
+#tab-drawer:checked~.tabs label[for="tab-drawer"],#tab-cabinet:checked~.tabs label[for="tab-cabinet"],
+#tab-edit:checked~.tabs label[for="tab-edit"],#tab-flat:checked~.tabs label[for="tab-flat"],
+#tab-cut:checked~.tabs label[for="tab-cut"],#tab-more:checked~.tabs label[for="tab-more"]{color:var(--yellow);border-bottom-color:var(--yellow)}
+
+.steps{list-style:none;counter-reset:s}
+.steps>li{counter-increment:s;position:relative;background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:14px 16px 14px 56px;margin-bottom:10px}
+.steps>li::before{content:counter(s);position:absolute;left:14px;top:12px;width:28px;height:28px;border-radius:50%;
+ border:1px solid rgba(251,191,36,.45);background:rgba(251,191,36,.07);color:var(--yellow);font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+.steps>li b{color:#fff}
+.steps ul{margin:6px 0 0 18px}
+
+.row{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;margin:10px 0 6px}
+.row>.txt{flex:1 1 320px;min-width:0}
+.row>figure{flex:0 1 auto}
+figure{margin:10px 0 14px}
+figure img{display:block;max-width:100%;height:auto;border:1px solid var(--border);border-radius:5px;background:var(--surface)}
+figure.dlg img{width:380px}
+figure.half img{width:440px}
+pre.cmd{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--green);background:var(--surface);border:1px solid rgba(74,222,128,.3);border-radius:4px;padding:10px 12px;margin:8px 0;white-space:pre-wrap;word-break:break-all;user-select:all;-webkit-user-select:all}
+figcaption{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--dim);margin-top:6px;letter-spacing:.5px;max-width:520px}
+
+table.f{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0 12px}
+table.f td{border-top:1px solid var(--border);padding:7px 8px;vertical-align:top}
+table.f td:first-child{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--white);white-space:nowrap;width:1%}
+table.f tr:first-child td{border-top:none}
+
+.note{border-radius:4px;padding:10px 14px;font-size:14px;margin:12px 0}
+.note.tip{background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.3)}
+.note.tip b{color:var(--green)}
+.note.warn{background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.3)}
+.note.warn b{color:var(--yellow)}
+.note.info{background:rgba(56,189,248,.06);border:1px solid rgba(56,189,248,.28)}
+.note.info b{color:var(--blue)}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin:10px 0}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:12px 14px;font-size:14px}
+.card h4{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--yellow);margin-bottom:6px}
+.where{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--purple);border:1px solid rgba(167,139,250,.35);background:rgba(167,139,250,.07);border-radius:3px;padding:2px 8px;margin-bottom:10px}
+footer{margin-top:40px;border-top:1px solid var(--border);padding-top:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:1px}
+@media (max-width:520px){.steps>li{padding-left:50px}figure.dlg img,figure.half img{width:100%}}
+</style>
+</head>
+<body>
+<div class="page">
+<header>
+<h1>NM<em>Joinery</em> for Fusion</h1>
+<div class="sub">Install · joints · drawers · cabinets · edit · lay flat &amp; nesting · cut list — version 0.8.0</div>
+</header>
+
+<input type="radio" name="tabs" class="tab-radio" id="tab-install" checked><input type="radio" name="tabs" class="tab-radio" id="tab-joint"><input type="radio" name="tabs" class="tab-radio" id="tab-drawer"><input type="radio" name="tabs" class="tab-radio" id="tab-cabinet"><input type="radio" name="tabs" class="tab-radio" id="tab-edit"><input type="radio" name="tabs" class="tab-radio" id="tab-flat"><input type="radio" name="tabs" class="tab-radio" id="tab-cut"><input type="radio" name="tabs" class="tab-radio" id="tab-more">
+<div class="tabs">
+<label class="tab" for="tab-install">Install</label>
+<label class="tab" for="tab-joint">NM Joint</label>
+<label class="tab" for="tab-drawer">NM Drawer</label>
+<label class="tab" for="tab-cabinet">NM Cabinet</label>
+<label class="tab" for="tab-edit">Edit &amp; parameters</label>
+<label class="tab" for="tab-flat">Lay Flat &amp; nesting</label>
+<label class="tab" for="tab-cut">Cut List</label>
+<label class="tab" for="tab-more">Update &amp; tips</label>
+</div>
+
+<!-- ============================== INSTALL ============================== -->
+<div id="pane-install" class="pane">
+<h2>Install (Mac or Windows)</h2>
+<p class="lead">One line does it: it downloads the newest version and puts it in Fusion's own add-in folder, where Fusion finds it and starts it by itself.
+Run the same line again to update.</p>
+
+<h3>Mac</h3>
+<ol class="steps">
+<li><b>Open Terminal</b>: press <span class="k">Cmd+Space</span>, type <i>Terminal</i>, press Return.</li>
+<li><b>Paste this line and press Return:</b>
+<pre class="cmd">curl -fsSL https://raw.githubusercontent.com/nvdberg/fusion-addins/main/install-mac.sh | bash</pre>
+It ends with <i>Done: NMJoinery x.y.z is in Fusion's add-in folder</i>.</li>
+<li><b>Restart Fusion</b> (quit it first if it was open). NMJoinery starts by itself.</li>
+</ol>
+
+<h3>Windows</h3>
+<ol class="steps">
+<li><b>Open PowerShell</b>: click Start, type <i>PowerShell</i>, open <i>Windows PowerShell</i> (no need for "as administrator").</li>
+<li><b>Paste this line and press Enter:</b>
+<pre class="cmd">irm https://raw.githubusercontent.com/nvdberg/fusion-addins/main/install-windows.ps1 | iex</pre>
+It ends with <i>Done: NMJoinery x.y.z is in Fusion's add-in folder</i>.</li>
+<li><b>Restart Fusion</b> (quit it first if it was open). NMJoinery starts by itself.</li>
+</ol>
+
+<div class="note info"><b>Rather not use Terminal?</b> Download the zip from <a href="https://github.com/nvdberg/fusion-addins/releases">Releases</a> (under <b>Assets</b>, not the green Code button),
+unzip it and double-click <b>Install on Mac.command</b> or <b>Install on Windows.cmd</b>. The first time, your computer may warn about a file from the internet:
+on a Mac allow it under <i>System Settings › Privacy &amp; Security › Open Anyway</i>; on Windows click <i>More info › Run anyway</i>.</div>
+
+<h3>Check that it's there</h3>
+<p><span class="k">SOLID</span> › <span class="k">CREATE</span> now ends with <b>NM Lay Flat</b>, <b>NM Drawer</b>, <b>NM Cabinet</b> and <b>NM Cut List</b>.
+<b>NM Joint</b> is under <span class="k">SOLID</span> › <span class="k">MODIFY</span>.</p>
+<figure class="half"><img src="img/01_create_menu.jpg" alt="The SOLID > CREATE menu with the four NM buttons outlined in yellow at the bottom"><figcaption>SOLID › CREATE: the four NM buttons at the bottom.</figcaption></figure>
+<p>In <span class="k">UTILITIES</span> › <span class="k">ADD-INS</span> › <span class="k">Scripts and Add-Ins</span> (<span class="k">Shift+S</span>) NMJoinery is in the list with
+<b>Run</b> on and <b>Run on Startup</b> ticked.</p>
+<figure><img src="img/08_addins.jpg" alt="Scripts and Add-Ins window with NMJoinery selected, Run on and Run on Startup ticked" style="width:640px"><figcaption>NMJoinery in Scripts and Add-Ins. (Other add-ins blurred.)</figcaption></figure>
+<div class="note warn"><b>Added it by hand before?</b> If NMJoinery is already in that list from another folder (added with the +), remove that entry first, so Fusion doesn't load it twice.</div>
+
+<h3>By hand (if the installer can't be used)</h3>
+<ol class="steps">
+<li><b>Unzip</b> the zip from Releases and move the <code>NMJoinery</code> folder to a place it can stay (not Downloads), e.g. <code>Documents/Fusion Add-Ins/NMJoinery</code>.</li>
+<li>In Scripts and Add-Ins click <span class="k">+ ▾</span> › <span class="k">Script or add-in from device</span> and pick the <code>NMJoinery</code> folder
+(the one with <code>NMJoinery.manifest</code> inside).
+<figure><img src="img/09_add_menu.png" alt="The + menu in Scripts and Add-Ins with 'Script or add-in from device' outlined" style="width:560px"><figcaption>The + menu: "Script or add-in from device".</figcaption></figure></li>
+<li>Switch its <b>Run</b> toggle on and tick <b>Run on Startup</b>. (Older Fusion: <i>Add-Ins</i> tab, green <b>+</b>, <b>Run</b>.)</li>
+</ol>
+<div class="note tip"><b>No account, nothing sent.</b> The installer and the add-in only read the public GitHub release list.</div>
+</div>
+
+<!-- ============================== JOINT ============================== -->
+<div id="pane-joint" class="pane">
+<h2>NM Joint</h2>
+<div class="where">SOLID › MODIFY › NM Joint</div>
+<p class="lead">Turns boards that overlap or touch into finger joints, tabs &amp; slots or mortise &amp; tenon, cut for your bit,
+as one editable item in the timeline.</p>
+
+<h3>How the boards should meet</h3>
+<div class="cards">
+<div class="card"><h4>Corner → fingers</h4>Model both boards full size so they <b>overlap</b> at the corner. NM Joint cuts the fingers out of both.</div>
+<div class="card"><h4>End on a face → tabs</h4>The <b>end</b> of one board <b>touches the face</b> of the other (a shelf against a side). You get tabs &amp; slots, or mortise &amp; tenon.</div>
+<div class="card"><h4>A whole box at once</h4>Select all the boards: every pair that overlaps or touches gets a joint. Or tick <b>Whole box</b> and click one board.</div>
+</div>
+
+<figure><img src="img/05b_joint_boards.jpg" alt="Two plain boards, a side and a bottom, overlapping at the corner" style="width:620px"><figcaption>Before: a side and a bottom, both full size, overlapping at the corner.</figcaption></figure>
+
+<div class="row">
+<figure class="dlg"><img src="img/05_joint_dialog.png" alt="NM Joint dialog: 2 boards selected, Fingers / tabs auto, bit 6.35 mm, gap 0.10 mm, dogbones"><figcaption>The NM Joint dialog. The line at the bottom shows what you'll get.</figcaption></figure>
+<div class="txt">
+<table class="f">
+<tr><td>Boards</td><td>Pick 2 or more boards (solid bodies).</td></tr>
+<tr><td>Whole box</td><td>Ticked: click one board and every board of that box is picked too.</td></tr>
+<tr><td>Joint</td><td><b>Fingers / tabs (auto)</b>: chosen from how the boards meet. <b>Mortise &amp; tenon</b>: end-on-face only.</td></tr>
+<tr><td>Bit</td><td>The bit that cuts it. <i>Global nmj_bit</i> = the design parameter (default 1/4" = 6.35 mm).</td></tr>
+<tr><td>Gap</td><td>Clearance per side, default 0.10 mm. Too tight after cutting → bigger; too loose → smaller.</td></tr>
+<tr><td>Global</td><td>Ticked: uses <code>nmj_gap</code>, shared by every ticked joint. Change it once in Change Parameters to loosen or tighten them all.</td></tr>
+<tr><td>Corners</td><td>None (square), Dogbones, Rounded, T-bones sideways, T-bones deep. Dogbones / T-bones let a round bit fit square corners; T-bones show less.</td></tr>
+<tr><td>Count · Width</td><td>Number of fingers / tabs and their width. <b>0 = automatic</b> (width ≈ 2 × board thickness).</td></tr>
+<tr><td>Flip</td><td>Swaps which board gets the end fingers, or puts tabs at the ends.</td></tr>
+<tr><td>Depth · Thick · Length · Ends</td><td>For tabs and tenons: how deep they go (0 = through), their thickness, length, and the space kept free at both ends. 0 = automatic.</td></tr>
+</table>
+<p>Hover over any field in Fusion for a short explanation.</p>
+</div>
+</div>
+
+<figure><img src="img/05c_joint_fingers.jpg" alt="The bottom board after the joint: fingers with dogbones in the inside corners" style="width:720px"><figcaption>After OK (side hidden): the bottom's fingers, with dogbones in the inside corners.</figcaption></figure>
+
+<h3>Change a joint</h3>
+<p>Double-click the joint in the timeline: the same dialog opens. With several joints in one item, the <b>Edit</b> dropdown shows
+<i>All joints</i> or one joint, with its real count and sizes, and lets you give that joint its own settings.</p>
+<div class="note tip"><b>Cut a test joint first.</b> Two scraps with 3–4 fingers tell you the gap for your bit and material, before you cut a whole box.</div>
+</div>
+
+<!-- ============================== DRAWER ============================== -->
+<div id="pane-drawer" class="pane">
+<h2>NM Drawer</h2>
+<div class="where">SOLID › CREATE › NM Drawer</div>
+<p class="lead">One dialog builds a whole drawer or box: the boards, the joints and a parameter for every size.</p>
+
+<div class="row">
+<figure class="dlg"><img src="img/02_drawer_dialog.png" alt="NM Drawer dialog in mm, 600 x 400 x 300 mm, 12 mm boards, two dividers"><figcaption>NM Drawer: a 600 × 400 × 300 mm box, 12 mm boards, 2 dividers.</figcaption></figure>
+<div class="txt">
+<table class="f">
+<tr><td>Units</td><td>mm or inch. Switching converts every size; you can always type either (<code>450 mm</code> or <code>17.75 in</code>).</td></tr>
+<tr><td>Presets</td><td>Type a name under <i>Save as</i> and Save, to keep the whole setup ("Kitchen drawer"). Pick it next time to fill in every field.</td></tr>
+<tr><td>Size from</td><td><b>Box outside sizes</b>, or <b>Cabinet opening + slides</b>: type the opening and pick the slides; the box is worked out for you.</td></tr>
+<tr><td>Name</td><td>Used in front of every parameter (<code>drawer_w</code>, <code>drawer_h</code> …).</td></tr>
+<tr><td>Layout</td><td>Front &amp; back between the sides, or sides between front &amp; back.</td></tr>
+<tr><td>Width · Depth · Height</td><td>Outside sizes of the box.</td></tr>
+<tr><td>Boards</td><td>Board thickness (1/2" Baltic birch = 12 mm).</td></tr>
+<tr><td>Joints</td><td><b>Finger joints and tabs (CNC)</b>, or <b>None</b>: plain panels for a Domino, dowels or screws. Same sizes either way.</td></tr>
+<tr><td>Corners</td><td>Square, dogbones or T-bones for the joints.</td></tr>
+<tr><td>Top</td><td>Ticked: a closed box.</td></tr>
+<tr><td>Bottom</td><td>Between the 4 walls (tabbed in), or a loose panel in a groove.</td></tr>
+<tr><td>Dividers</td><td>Front-to-back and / or left-to-right; where they cross they half-lap.</td></tr>
+</table>
+</div>
+</div>
+
+<h3>Also in the dialog</h3>
+<div class="cards">
+<div class="card"><h4>Slides</h4>Lee Valley 61080 soft-close side-mount built in (12.7–13.5 mm per side, 450–600 mm), or <i>Other</i>: type the gap. The longest slide that fits is picked. A shallow groove marks the slide line on both sides.</div>
+<div class="card"><h4>Bank of drawers</h4>In opening mode, <i>Drawers</i> more than 1: several drawers stacked in one opening, all the same height or graduated. One set of <code>bank_*</code> parameters drives them all.</div>
+<div class="card"><h4>Front &amp; pull</h4>False front with 2 or 4 screw holes; finger pull (scoop) or hand hole (slot) in the front.</div>
+<div class="card"><h4>Lay flat</h4>Tick it for a flat copy of every board, ready for CAM. See the <i>Lay Flat</i> tab.</div>
+</div>
+<div class="note info"><b>The result message</b> at the bottom of the dialog tells you where the slides go: the drawer line up from the bottom of the box sides, and the cabinet line up from the opening bottom.</div>
+</div>
+
+<!-- ============================== CABINET ============================== -->
+<div id="pane-cabinet" class="pane">
+<h2>NM Cabinet</h2>
+<div class="where">SOLID › CREATE › NM Cabinet</div>
+<p class="lead">A whole frameless cabinet in one go: sides, bottom, top, back, base and what goes inside, drawers included.</p>
+
+<div class="row">
+<figure class="dlg"><img src="img/03_cabinet_dialog.png" alt="NM Cabinet dialog: 600 x 720 x 560 mm, 18 mm boards, grooved back with hanging rails, one section with 3 graduated drawers on Lee Valley slides"><figcaption>NM Cabinet: 600 × 720 × 560 mm, one section with 3 graduated drawers.</figcaption></figure>
+<div class="txt">
+<table class="f">
+<tr><td>Units</td><td>mm or inch, as in NM Drawer.</td></tr>
+<tr><td>Name · sizes</td><td>Outside width, height (floor to top) and depth. Boards default 18 mm (3/4" Baltic birch).</td></tr>
+<tr><td>Joints</td><td>Tab joints (CNC), or <b>None</b>: plain panels. With None the top sits on the sides and the bottom under them, full width, so a load rests on the sides.</td></tr>
+<tr><td>Base</td><td>Toe kick notched in the sides, a separate plinth, or none (wall cabinet, legs).</td></tr>
+<tr><td>Top</td><td>Full top panel, or two stretchers (under a counter top).</td></tr>
+<tr><td>Back</td><td>Thin panel in a groove (default 6 mm in a 6 mm deep groove), or a solid board flush with the back edges, tabbed in.</td></tr>
+<tr><td>Hanging rails</td><td>Grooved back only: a rail under the top and one on the bottom (90 mm high) to screw the cabinet to the wall.</td></tr>
+<tr><td>Front thick · Gap between</td><td>Doors and drawer fronts (18 mm) cover the carcass edges, with a gap between them (3 mm).</td></tr>
+<tr><td>Sections</td><td>1 to 4, top to bottom, with a fixed shelf between them. Type the height of each; the bottom one gets what is left.</td></tr>
+<tr><td>Holds</td><td><b>Drawers</b> (1–8, same or graduated, slides or none, an NM Drawer preset for the box), <b>Doors</b> (one, two, or Auto: two above 600 mm wide) or <b>Open shelves</b>.</td></tr>
+<tr><td>Shelves · Adjustable</td><td>Number of shelves. Adjustable = loose shelves on 5 mm pins (32 mm hole rows); off = fixed, tabbed into the sides.</td></tr>
+<tr><td>Lay flat</td><td>A flat copy of the carcass and of each drawer, for CAM.</td></tr>
+</table>
+</div>
+</div>
+<div class="note warn"><b>Not in yet:</b> hinge holes, face frame, wooden runners for drawers without slides.</div>
+</div>
+
+<!-- ============================== EDIT ============================== -->
+<div id="pane-edit" class="pane">
+<h2>Change it after it's made</h2>
+<p class="lead">Two ways: double-click the NM item in the timeline, or change the numbers in Change Parameters.</p>
+
+<h3>1 · Double-click the timeline item</h3>
+<p>Every drawer, bank of drawers or cabinet made from its dialog (version 0.8.0 and later) gets one item at the <b>end of the timeline</b>.
+Hover over it and Fusion shows its name, for example <i>NM Cabinet Cabinet</i>.</p>
+<figure><img src="img/06b_timeline_item.png" alt="The end of the timeline with the NM Cabinet item outlined" style="width:640px"><figcaption>The NM item is the last one in the timeline (outlined).</figcaption></figure>
+<div class="row">
+<figure class="dlg"><img src="img/06_edit_dialog.png" alt="Edit NM Drawer / Cabinet dialog, filled in with the cabinet's values"><figcaption>Double-click it: the same dialog opens, filled in.</figcaption></figure>
+<div class="txt">
+<p>Change what you like and click OK.</p>
+<div class="cards" style="grid-template-columns:1fr">
+<div class="card"><h4>Only sizes changed</h4>Just the parameters are set. Nothing is rebuilt, so things that refer to the boards (CAM toolpaths, your own joints) stay linked.</div>
+<div class="card"><h4>Anything else changed</h4>Joints, layout, number of drawers, sections …: the old components are removed and it is built again in the same place, with the same parameter names. Check CAM setups that used the old boards.</div>
+</div>
+</div>
+</div>
+
+<h3>2 · Change Parameters</h3>
+<p><span class="k">MODIFY</span> › <span class="k">Change Parameters</span> (the <i>fx</i> button), then open <b>User Parameters</b>. Every size has a
+parameter with the name in front: <code>cabinet_w</code>, <code>cabinet_h</code>, <code>cabinet_d</code>, <code>cabinet_t</code> …, and for a drawer
+<code>drawer_w</code>, <code>drawer_h</code> …. Each one has a comment that says what it is. Change a number and the boards, joints, drawers and fronts follow.</p>
+<figure><img src="img/07_parameters.jpg" alt="Fusion Parameters window with the cabinet_* user parameters and their comments" style="width:640px"><figcaption>User parameters of a cabinet. The Comments column says what each one is.</figcaption></figure>
+<div class="note tip"><b>Two you'll use a lot:</b> <code>nmj_gap</code> (clearance of every "Global" joint, default 0.1 mm) and <code>nmj_bit</code> (the bit, default 6.35 mm).</div>
+<div class="note warn"><b>Rows written as a formula</b> (like <code>cabinet_h - cabinet_t</code>) follow the others; change the plain numbers instead.</div>
+</div>
+
+<!-- ============================== LAY FLAT ============================== -->
+<div id="pane-flat" class="pane">
+<h2>NM Lay Flat &amp; nesting</h2>
+<div class="where">SOLID › CREATE › NM Lay Flat</div>
+<p class="lead">Makes a flat copy of every board, inside face up, in a new component next to the model, ready for CAM. The copies follow every size change.</p>
+
+<div class="row">
+<figure class="dlg"><img src="img/04_layflat_dialog.png" alt="NM Lay Flat dialog: Nested on sheets, 1/4 inch bit, spacing 8.35 mm, 4 x 8 ft sheet, 10 mm edge margin"><figcaption>Lay Flat, nested on 4 × 8 ft sheets with a 1/4" bit.</figcaption></figure>
+<div class="txt">
+<table class="f">
+<tr><td>Boards</td><td>Pick boards, or whole components (a cabinet, a drawer).</td></tr>
+<tr><td>Layout</td><td><b>In a row</b> (one after the other) or <b>Nested on sheets</b> (packed, one row of sheets per thickness).</td></tr>
+<tr><td>Bit</td><td>Spacing = bit + 2 mm (1/4" bit → 8.35 mm). Choose <i>Minimum distance</i>, or type in Spacing, to set your own.</td></tr>
+<tr><td>Sheet</td><td>4 × 8 ft, 5 × 5 ft Baltic birch, 4 × 4 ft, 2 × 4 ft, 2440 × 1220, 2500 × 1250 mm, or Custom size.</td></tr>
+<tr><td>Edge margin</td><td>Kept free along every sheet edge (10 mm).</td></tr>
+<tr><td>Turn boards 90°</td><td>Off: the long side (grain) stays along the sheet length.</td></tr>
+<tr><td>Leftovers first</td><td>Pieces you have lying around, used before new sheets: <code>600 x 900; 450 x 1200 x 18</code> (length × width [× thickness]; plain numbers are mm, <code>24 in x 30 in</code> works).</td></tr>
+</table>
+</div>
+</div>
+
+<figure><img src="img/04b_nested_sheets.jpg" alt="A cabinet with 3 drawers and its boards nested on see-through sheets next to it"><figcaption>A cabinet with 3 drawers, nested: each see-through slab is one sheet.</figcaption></figure>
+
+<div class="note tip"><b>Use a sheet as CAM stock.</b> Each sheet is a see-through body called e.g. <i>Sheet 1 - 18 mm</i>. In MANUFACTURE: <b>Setup › Stock › From solid</b> and pick that sheet body; pick the boards on it as the model.</div>
+<p>Double-click the Lay Flat feature in the timeline to change the layout, sheet, bit, leftovers or spacing. Resize the model and the copies are nested again (sheets are added or removed).</p>
+</div>
+
+<!-- ============================== CUT LIST ============================== -->
+<div id="pane-cut" class="pane">
+<h2>NM Cut List</h2>
+<div class="where">SOLID › CREATE › NM Cut List</div>
+<p class="lead">Every board with its size, to cut by hand or to order sheet goods. Save it as a CSV for Excel, Numbers or Google Sheets.</p>
+<figure><img src="img/cutlist.jpg" alt="NM Cut List dialog in inches next to a cabinet: parts, quantity, length, width, thickness, and the area per thickness"><figcaption>A cabinet's cut list in inches (to the nearest 1/32"), with the area per thickness.</figcaption></figure>
+<table class="f">
+<tr><td>Boards</td><td>Pick a cabinet, a drawer or single boards, or nothing for the whole design. Hidden boards and Lay Flat copies are left out.</td></tr>
+<tr><td>Units</td><td>mm, or inch to the nearest 1/32".</td></tr>
+<tr><td>Sheets</td><td>4 × 8 ft or 5 × 5 ft for a rough sheet count per thickness (area + 15 %, not a nesting), or no count.</td></tr>
+<tr><td>Size</td><td>The blank you cut: fingers and tabs included, length = the longest side. Same size in the same component is counted together (<i>Left, Right × 2</i>).</td></tr>
+<tr><td>Save CSV</td><td>Asks where to save the file.</td></tr>
+</table>
+<div class="note info"><b>For a real sheet layout</b> use Lay Flat › Nested on sheets: that one packs the boards.</div>
+</div>
+
+<!-- ============================== UPDATE & TIPS ============================== -->
+<div id="pane-more" class="pane">
+<h2>Update, remove &amp; tips</h2>
+
+<h3>When there's a new version</h3>
+<p>A while after Fusion starts, NMJoinery checks the public release list on GitHub. If there is a newer version it asks <b>once</b> whether to open the download page.</p>
+<ol class="steps">
+<li><b>Quit Fusion.</b></li>
+<li><b>Run the install line again</b> (Terminal on a Mac, PowerShell on Windows, see <i>Install</i>), or double-click the installer in the new zip.
+Your drawer presets and last-used settings are kept.</li>
+<li><b>Start Fusion.</b> Scripts and Add-Ins shows the new version number.</li>
+</ol>
+<p>Installed by hand? Stop NMJoinery, copy the new files over the old ones in your folder (keep <code>nm_drawer_presets.json</code>), and Run it again.</p>
+
+<h3>Remove</h3>
+<p>Scripts and Add-Ins › NMJoinery › switch Run off and untick Run on Startup. Then quit Fusion and delete the <code>NMJoinery</code> folder: on a Mac in <code>~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/AddIns</code>, on Windows in <code>%APPDATA%\Autodesk\Autodesk Fusion 360\API\AddIns</code> (or wherever you put it by hand).</p>
+
+<h3>Good to know</h3>
+<div class="cards">
+<div class="card"><h4>One dialog at a time</h4>Finish an NM dialog with OK or Cancel before you start something else. Starting another command cancels it.</div>
+<div class="card"><h4>0 = automatic</h4>Finger count, width, tab length …: leave 0 and the add-in picks a size that suits the board and the bit.</div>
+<div class="card"><h4>mm or inch</h4>Type sizes in either unit in any field. The Units dropdown only changes what the dialog shows.</div>
+<div class="card"><h4>Air-cut first</h4>Free to use, no warranty. Cut a test joint and air-cut a new program before cutting real stock.</div>
+</div>
+</div>
+
+<footer>NMJOINERY · NM WOODWORKS · GITHUB.COM/NVDBERG/FUSION-ADDINS</footer>
+</div>
+</body>
+</html>

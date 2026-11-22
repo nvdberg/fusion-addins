@@ -24,7 +24,9 @@ USE
 NM DRAWER (SOLID > CREATE > NM Drawer)
 - One dialog builds a whole drawer or box: the boards, the parameters and the joints.
 - Sizes are outside sizes. Sides run full depth, or front/back run full width (Layout).
-- Bottom: finger-jointed into the sides, or a loose panel in a groove.
+- Bottom: between the 4 walls, or a loose panel in a groove.
+- Joints: finger joints (CNC), or None = plain panels that butt against each other, to join with a
+  Domino, dowels or screws (no CNC needed). The sizes are the same either way.
 - Options: a top (closed box), dividers in dados, a finger pull or hand hole in the front,
   a false front with screw holes, and "Lay flat" (see below).
 - Dividers: any number front-to-back and/or left-to-right (a sorting grid). Where they cross they
@@ -64,6 +66,8 @@ NM DRAWER (SOLID > CREATE > NM Drawer)
 NM CABINET (SOLID > CREATE > NM Cabinet)  - new in 0.7.0, first version
 - One dialog builds a whole frameless cabinet: sides, bottom, top, back, base and what goes inside,
   with tab joints between the carcass boards and the back in a groove.
+- Joints: tab joints (CNC), or None = plain panels for a Domino, dowels or screws: sides full
+  height, bottom / top / shelves / kick board between them. The drawers follow the same choice.
 - Base: toe kick notched into the sides, a separate plinth, or none (wall cabinet, legs).
 - Top: a full panel, or two stretchers (front and back) to go under a counter top.
 - Sections (1 to 4, top to bottom), with a fixed shelf between them. Each one holds:

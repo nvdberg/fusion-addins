@@ -15,7 +15,8 @@ NEW = adsk.fusion.FeatureOperations.NewBodyFeatureOperation
 CUT = adsk.fusion.FeatureOperations.CutFeatureOperation
 
 LAYOUTS = ['Front & back between the sides', 'Sides between front & back']
-BOTTOMS = ['Finger-jointed (tabs into all 4 sides)', 'In a groove (slides in, e.g. plywood)']
+JOINTS = ['Finger joints and tabs (CNC)', 'None: butt joints (Domino, dowels, screws)']
+BOTTOMS = ['Between the 4 walls (tabs into them with finger joints)', 'In a groove (slides in, e.g. plywood)']
 PULLS = ['None', 'Finger pull (scoop in the top edge)', 'Hand hole (slot)']
 SCREWS = ['None', '2 holes', '4 holes']
 SIZES = ['Box outside sizes', 'Cabinet opening + slides']
@@ -46,14 +47,14 @@ DEFAULTS = {
     'size': 0, 'ow': '560 mm', 'oh': '150 mm', 'od': '520 mm', 'slide': 0, 'sg': '13 mm', 'sl': '500 mm',
     'ot': '6 mm', 'ob': '17 mm', 'marks': True, 'spos': 0, 'sh': '46.04 mm',
     'sline': '44 mm', 'sback': '5.2 mm',
-    'name': 'Drawer', 'layout': 0, 'w': '450 mm', 'd': '400 mm', 'h': '125 mm', 't': '12 mm', 'relief': 1, 'top': False,
+    'name': 'Drawer', 'layout': 0, 'joints': 0, 'w': '450 mm', 'd': '400 mm', 'h': '125 mm', 't': '12 mm', 'relief': 1, 'top': False,
     'bottom': 0, 'bt': '12 mm', 'gd': '6 mm', 'gh': '10 mm',
     'div_fb': 0, 'div_lr': 0, 'vt': '12 mm', 'vd': '6 mm', 'vdrop': '10 mm',
     'pull': 0, 'pw': '80 mm', 'pd': '25 mm', 'hl': '100 mm', 'hh': '30 mm', 'pz': '40 mm',
     'ff': False, 'ft': '18 mm', 'fs': '10 mm', 'ftop': '10 mm', 'fb': '10 mm', 'holes': 2, 'hd': '4.5 mm',
     'flat': False, 'nd': 1, 'heights': 0, 'step': '25 mm', 'rev': '3 mm',
 }
-DROPDOWNS = ('size', 'slide', 'spos', 'heights', 'layout', 'relief', 'bottom', 'pull', 'holes')
+DROPDOWNS = ('size', 'slide', 'spos', 'heights', 'layout', 'joints', 'relief', 'bottom', 'pull', 'holes')
 OPENING_KEYS = ('ow', 'oh', 'od', 'sg', 'sl', 'ot', 'ob')
 MARK_KEYS = ('sh', 'sline', 'sback')
 VALUE_KEYS = OPENING_KEYS + MARK_KEYS + ('w', 'd', 'h', 't', 'bt', 'gd', 'gh', 'vt', 'vd', 'vdrop', 'pw', 'pd', 'hl', 'hh', 'pz',
@@ -569,7 +570,10 @@ def build(o):
         jointed.append(m.box('Top', *inner, '{h} - {tt}', '{h}'))
     exprs = dict(nm.DEFAULT_EXPR)
     exprs['relief'] = str(int(o['relief']))
-    made, lines = nm.create_all([b.createForAssemblyContext(occ) for b in jointed], exprs)
+    if o['joints'] == 0:
+        made, lines = nm.create_all([b.createForAssemblyContext(occ) for b in jointed], exprs)
+    else:                         # plain panels that butt against each other: Domino, dowels, screws
+        lines = ['No joints cut: the boards butt against each other (join them with Dominos, dowels or screws)']
 
     sides = lambda *names: [m.body(n) for n in names]
     if o['bottom'] == 1:
@@ -711,6 +715,8 @@ TIPS = {
     'w': 'Outside width, left to right.', 'd': 'Outside depth, front to back.', 'h': 'Outside height of the sides.',
     't': 'Thickness of the sides, front and back. Default 12 mm = 1/2" Baltic birch (measure your sheet).',
     'relief': 'Inside corners of the finger joints: dogbones or T-bones (see NM Joint).',
+    'joints': 'Finger joints and tabs cut by the CNC, or none: plain panels that butt against each other, '
+              'for joining with a Domino, dowels or screws (no CNC needed). Sizes stay the same.',
     'top': 'Closed box: a top board, finger-jointed like the bottom.',
     'bottom': 'Finger-jointed: tabs into all four sides. In a groove: a panel that slides into a groove in the sides.',
     'bt': 'Bottom thickness (same as the boards = linked to them).',
@@ -808,6 +814,7 @@ def add_inputs(inputs, o):
     _dropdown(c, 'layout', 'Layout', LAYOUTS, o['layout'])
     for k, label in (('w', 'Width'), ('d', 'Depth'), ('h', 'Height'), ('t', 'Boards')):
         val(c, k, label)
+    _dropdown(c, 'joints', 'Joints', JOINTS, o['joints'])
     _dropdown(c, 'relief', 'Corners', nm.RELIEF_NAMES, o['relief'])
     _tip(c.addBoolValueInput('top', 'Top', True, '', o['top']))
     g = inputs.addGroupCommandInput('g_bottom', 'Bottom')
@@ -972,6 +979,7 @@ def show(inputs):
     div = it('div_fb').value > 0 or it('div_lr').value > 0
     for k in ('vstock', 'vt', 'vd', 'vdrop'):
         it(k).isVisible = div
+    it('relief').isVisible = it('joints').selectedItem.index == 0 or div    # dividers half-lap with it too
     pull = it('pull').selectedItem.index
     for k in ('pw', 'pd'):
         it(k).isVisible = pull == 1

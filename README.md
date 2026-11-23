@@ -43,3 +43,8 @@ needed. Running the install line again always works too.
 ## Note
 
 Free to use, no warranty. Always air-cut a new program first.
+
+## License
+
+Free to use for anything, including in commercial software: copy it, change it, rename it, sell it. No credit needed.
+License: [0BSD](LICENSE) (Zero-Clause BSD).

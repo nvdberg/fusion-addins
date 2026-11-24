@@ -79,7 +79,7 @@ footer{margin-top:40px;border-top:1px solid var(--border);padding-top:10px;font-
 <div class="page">
 <header>
 <h1>NM<em>Joinery</em> for Fusion</h1>
-<div class="sub">Install · joints · drawers · cabinets · edit · lay flat &amp; nesting · cut list — version 0.8.0</div>
+<div class="sub">Install · joints · drawers · cabinets · edit · lay flat &amp; nesting · cut list — version 0.8.1</div>
 </header>
 
 <input type="radio" name="tabs" class="tab-radio" id="tab-install" checked><input type="radio" name="tabs" class="tab-radio" id="tab-joint"><input type="radio" name="tabs" class="tab-radio" id="tab-drawer"><input type="radio" name="tabs" class="tab-radio" id="tab-cabinet"><input type="radio" name="tabs" class="tab-radio" id="tab-edit"><input type="radio" name="tabs" class="tab-radio" id="tab-flat"><input type="radio" name="tabs" class="tab-radio" id="tab-cut"><input type="radio" name="tabs" class="tab-radio" id="tab-more">
@@ -169,7 +169,7 @@ as one editable item in the timeline.</p>
 <tr><td>Gap</td><td>Clearance per side, default 0.10 mm. Too tight after cutting → bigger; too loose → smaller.</td></tr>
 <tr><td>Global</td><td>Ticked: uses <code>nmj_gap</code>, shared by every ticked joint. Change it once in Change Parameters to loosen or tighten them all.</td></tr>
 <tr><td>Corners</td><td>None (square), Dogbones, Rounded, T-bones sideways, T-bones deep. Dogbones / T-bones let a round bit fit square corners; T-bones show less.</td></tr>
-<tr><td>Count · Width</td><td>Number of fingers / tabs and their width. <b>0 = automatic</b> (width ≈ 2 × board thickness).</td></tr>
+<tr><td>Size by</td><td><b>x board thickness</b>: finger / tab width = a multiple of the board (2 = twice the board; 2.5 or 3 = wider fingers). <b>Count per side</b>: that many on the edge. <b>Fixed width</b>: close to that width. A short edge still gets at least 3 fingers or 1 tab.</td></tr>
 <tr><td>Flip</td><td>Swaps which board gets the end fingers, or puts tabs at the ends.</td></tr>
 <tr><td>Depth · Thick · Length · Ends</td><td>For tabs and tenons: how deep they go (0 = through), their thickness, length, and the space kept free at both ends. 0 = automatic.</td></tr>
 </table>
@@ -268,6 +268,16 @@ Hover over it and Fusion shows its name, for example <i>NM Cabinet Cabinet</i>.<
 </div>
 </div>
 </div>
+
+<h3>Change the joints of a drawer or cabinet</h3>
+<p>All the joints of a box made by NM Drawer or NM Cabinet are one item: <i>NM Box … (8 joints)</i>. Double-click it and the dialog lists every joint with its tabs and size.</p>
+<div class="cards">
+<div class="card"><h4>Tick what to change</h4>Tick single joints, or use <b>Tick</b>: All joints, Corners, End on face, or Every joint of one board (Bottom = the 4 bottom joints). A change in the fields goes to the ticked joints only.</div>
+<div class="card"><h4>Which joint the fields show</h4>The ticked joint most of the others are like (a tie: the first one). <b>Make all like the one shown</b> gives every ticked joint all of its settings.</div>
+<div class="card"><h4>Highlight</h4>While the dialog is open the ticked joints light up, tabs and dogbones: <b style="color:#38bdf8">blue</b> = the joint the fields show, <b style="color:#fbbf24">yellow</b> = the other ticked joints. The boards show without the box's joints until you click OK.</div>
+<div class="card"><h4>Kept on rebuild</h4>Change the drawer or cabinet itself later (its timeline item) and the joints you changed here keep their settings.</div>
+</div>
+<div class="note tip"><b>Wider fingers on the bottom only:</b> Tick › Every joint of Bottom, then x board 3.5. The corners stay at 2.</div>
 
 <h3>2 · Change Parameters</h3>
 <p><span class="k">MODIFY</span> › <span class="k">Change Parameters</span> (the <i>fx</i> button), then open <b>User Parameters</b>. Every size has a

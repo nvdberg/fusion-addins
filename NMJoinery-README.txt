@@ -1,4 +1,4 @@
-NM Joinery - Fusion add-in (version 0.8.0)
+NM Joinery - Fusion add-in (version 0.8.1)
 ==========================================
 CNC-aware box finger joints, tab & slot and mortise & tenon joints.
 Each joint is an editable feature in the timeline: double-click it to change it.
@@ -30,6 +30,16 @@ USE
     - a board end touching a face      -> tabs & slots, or mortise & tenon (Joint dropdown)
 - Hover over any setting for a short explanation. "0" means automatic.
 - Double-click a joint in the timeline to edit it; the box at the bottom shows the actual sizes.
+- Size by: "x board thickness" (finger / tab width = a multiple of the board, default 2),
+  "Count per side" or "Fixed width". NM Drawer and NM Cabinet have the same "Finger x board".
+- A whole box made by NM Drawer / Cabinet is one NM Joint feature. Double-click it to change one
+  joint, several, or all: tick them (or Tick > All joints, Corners, Every joint of Bottom ...),
+  change a setting and only the ticked joints change. "Make all like the one shown" copies every
+  setting of the shown joint to the other ticked ones. While the dialog is open the ticked joints
+  light up in the model: blue = the joint the fields show (the one most ticked joints are like),
+  yellow = the other ticked joints. (While the dialog is open the boards show without this
+  feature's joints: Fusion shows the model as it was before the feature.)
+  Rebuilding a drawer or cabinet keeps these per-joint changes.
 - Corners can be plain, dogbone or T-bone (T-bone = the relief runs along the edge, less visible).
 
 NM DRAWER (SOLID > CREATE > NM Drawer)

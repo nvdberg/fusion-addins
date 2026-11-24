@@ -47,7 +47,7 @@ DEFAULTS = {
     'size': 0, 'ow': '560 mm', 'oh': '150 mm', 'od': '520 mm', 'slide': 0, 'sg': '13 mm', 'sl': '500 mm',
     'ot': '6 mm', 'ob': '17 mm', 'marks': True, 'spos': 0, 'sh': '46.04 mm',
     'sline': '44 mm', 'sback': '5.2 mm',
-    'name': 'Drawer', 'layout': 0, 'joints': 0, 'w': '450 mm', 'd': '400 mm', 'h': '125 mm', 't': '12 mm', 'relief': 1, 'top': False,
+    'name': 'Drawer', 'layout': 0, 'joints': 0, 'w': '450 mm', 'd': '400 mm', 'h': '125 mm', 't': '12 mm', 'relief': 1, 'fr': 2.0, 'top': False,
     'bottom': 0, 'bt': '12 mm', 'gd': '6 mm', 'gh': '10 mm',
     'div_fb': 0, 'div_lr': 0, 'vt': '12 mm', 'vd': '6 mm', 'vdrop': '10 mm',
     'pull': 0, 'pw': '80 mm', 'pd': '25 mm', 'hl': '100 mm', 'hh': '30 mm', 'pz': '40 mm',
@@ -636,6 +636,7 @@ def build(o):
         jointed.append(m.box('Top', *inner, '{h} - {tt}', '{h}'))
     exprs = dict(nm.DEFAULT_EXPR)
     exprs['relief'] = str(int(o['relief']))
+    exprs['ratio'] = '%g' % float(o.get('fr', 2.0))
     if o['joints'] == 0:
         made, lines = nm.create_all([b.createForAssemblyContext(occ) for b in jointed], exprs)
     else:                         # plain panels that butt against each other: Domino, dowels, screws
@@ -781,6 +782,8 @@ TIPS = {
     'w': 'Outside width, left to right.', 'd': 'Outside depth, front to back.', 'h': 'Outside height of the sides.',
     't': 'Thickness of the sides, front and back. Default 12 mm = 1/2" Baltic birch (measure your sheet).',
     'relief': 'Inside corners of the finger joints: dogbones or T-bones (see NM Joint).',
+    'fr': 'Finger and tab width = this x the board thickness (2 = twice the board; 2.5 or 3 = wider fingers). '
+          'A low side still gets at least 3 fingers, so they come out narrower there (the result says so).',
     'joints': 'Finger joints and tabs cut by the CNC, or none: plain panels that butt against each other, '
               'for joining with a Domino, dowels or screws (no CNC needed). Sizes stay the same.',
     'top': 'Closed box: a top board, finger-jointed like the bottom.',
@@ -885,6 +888,7 @@ def add_inputs(inputs, o):
         val(c, k, label)
     _dropdown(c, 'joints', 'Joints', JOINTS, o['joints'])
     _dropdown(c, 'relief', 'Corners', nm.RELIEF_NAMES, o['relief'])
+    _tip(c.addFloatSpinnerCommandInput('fr', 'Finger x board', '', 1, 6, 0.5, float(o.get('fr', 2.0))))
     _tip(c.addBoolValueInput('top', 'Top', True, '', o['top']))
     g = inputs.addGroupCommandInput('g_bottom', 'Bottom')
     c = g.children
@@ -1052,6 +1056,7 @@ def show(inputs):
     for k in ('vstock', 'vt', 'vd', 'vdrop'):
         it(k).isVisible = div
     it('relief').isVisible = it('joints').selectedItem.index == 0 or div    # dividers half-lap with it too
+    it('fr').isVisible = it('joints').selectedItem.index == 0
     pull = it('pull').selectedItem.index
     for k in ('pw', 'pd'):
         it(k).isVisible = pull == 1
@@ -1073,6 +1078,7 @@ def read(inputs):
         o[k] = dexpr(inputs, k)
     o['div_fb'], o['div_lr'] = it('div_fb').value, it('div_lr').value
     o['nd'] = it('nd').value
+    o['fr'] = round(it('fr').value, 2)
     for k in ('top', 'ff', 'flat', 'marks'):
         o[k] = it(k).value
     o['units'] = 1 if inch(inputs) else 0

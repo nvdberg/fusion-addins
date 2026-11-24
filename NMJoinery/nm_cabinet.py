@@ -25,7 +25,7 @@ SECTION = {'kind': 0, 'sh': '200 mm', 'nd': 3, 'heights': 1, 'step': '25 mm', 's
 DEFAULTS = {
     'name': 'Cabinet', 'w': '600 mm', 'h': '870 mm', 'd': '560 mm', 't': '18 mm',
     'bk': '6 mm', 'bgd': '6 mm', 'bin': '10 mm', 'base': 0, 'kh': '100 mm', 'kd': '75 mm', 'top': 0, 'sw': '100 mm',
-    'rev': '3 mm', 'ft': '18 mm', 'joints': 0, 'relief': 1, 'flat': True, 'ns': 1, 'units': 0, 'bstyle': 0,
+    'rev': '3 mm', 'ft': '18 mm', 'joints': 0, 'relief': 1, 'fr': 2.0, 'flat': True, 'ns': 1, 'units': 0, 'bstyle': 0,
     'rails': False, 'nh': '90 mm',
     'sections': [dict(SECTION) for _ in range(MAX_SECTIONS)],
 }
@@ -113,7 +113,7 @@ def drawer_opts(o, k, P=None, g=None):
     names = [i for i, s in enumerate(secs) if s['kind'] == 0]
     name = o['name'] + (' drawer' if len(names) == 1 else ' S%d drawer' % (k + 1))
     d.update(size=1, nd=int(sct['nd']), heights=int(sct['heights']), step=sct['step'], slide=int(sct['slide']),
-             name=name, ow=ow, oh=oh, od=od, sl=num(sl), top=False, flat=o['flat'], joints=int(o['joints']),
+             name=name, ow=ow, oh=oh, od=od, sl=num(sl), top=False, flat=o['flat'], joints=int(o['joints']), fr=float(o.get('fr', 2.0)),
              ff=True, ft=e('{ft}') if P else o['ft'], rev=rev,
              fs='%s - %s / 2' % (t, rev),
              ftop='%s - %s / 2' % (t if k == 0 else '%s / 2' % t, rev),
@@ -263,6 +263,7 @@ def build(o):
         jointed.append(m.box('Toe kick', '{t}', '{kd}', '{w} - {t}', '{kd} + {t}', '0', '{kh}'))
     exprs = dict(nm.DEFAULT_EXPR)
     exprs['relief'] = str(int(o['relief']))
+    exprs['ratio'] = '%g' % float(o.get('fr', 2.0))
     if not butt:
         made, lines = nm.create_all([b.createForAssemblyContext(occ) for b in jointed], exprs)
     else:                                       # plain panels: Domino, dowels, screws
@@ -374,6 +375,8 @@ TIPS = {
     'd': 'Outside depth of the sides (front edge to the back edge), without the fronts.',
     't': 'Carcass board thickness. 3/4" Baltic birch is 18 mm.',
     'relief': 'Corner relief in the tab joints, so the round bit can cut the inside corners.',
+    'fr': 'Tab and finger width = this x the board thickness (2 = twice the board; 2.5 or 3 = wider). The drawers '
+          'get the same. A short edge still gets at least 1 tab / 3 fingers, so they come out narrower there.',
     'joints': 'Tab joints cut by the CNC, or none: plain panels that butt against each other, for joining with '
               'a Domino, dowels or screws (no CNC needed). The drawers get the same choice. Sizes stay the same.',
     'base': 'Toe kick: a notch cut out of the sides at the front, with a kick board behind it. Plinth: a separate '
@@ -459,6 +462,7 @@ def add_inputs(inputs, o):
         val(c, k, label)
     _dropdown(c, 'joints', 'Joints', drw().JOINTS, o['joints'])
     _dropdown(c, 'relief', 'Corners', nm.RELIEF_NAMES, o['relief'])
+    _tip(c.addFloatSpinnerCommandInput('fr', 'Finger x board', '', 1, 6, 0.5, float(o.get('fr', 2.0))))
     g = inputs.addGroupCommandInput('g_base', 'Base and top')
     c = g.children
     _dropdown(c, 'base', 'Base', BASES, o['base'])
@@ -510,6 +514,7 @@ def read(inputs):
     for k in VALUE_KEYS:
         o[k] = drw().dexpr(inputs, k)
     o['ns'], o['flat'] = it('ns').value, it('flat').value
+    o['fr'] = round(it('fr').value, 2)
     o['units'] = 1 if drw().inch(inputs) else 0
     o['rails'] = it('rails').value
     o['sections'] = []
@@ -532,7 +537,7 @@ def show(inputs):
     it('bgd').isVisible = it('rails').isVisible = groove
     it('bin').isVisible = groove and not it('rails').value       # rails: the back sits right in front of them
     it('nh').isVisible = groove and it('rails').value
-    it('relief').isVisible = it('joints').selectedItem.index == 0
+    it('relief').isVisible = it('fr').isVisible = it('joints').selectedItem.index == 0
     for i in range(1, MAX_SECTIONS + 1):
         it('g_s%d' % i).isVisible = i <= ns
         kind = it('k%d' % i).selectedItem.index

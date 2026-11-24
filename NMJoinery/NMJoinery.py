@@ -26,6 +26,7 @@ PARAMS = [
     ('relief', 'Corner relief 0 none / 1 dogbone / 2 rounded / 3 T-bone sideways / 4 T-bone deep', '', '1'),
     ('count', 'Fingers or tabs (0 = auto)', '', '0'),
     ('finger_w', 'Target finger width (0 = auto)', 'mm', '0 mm'),
+    ('ratio', 'Auto finger width = this x board thickness', '', '2'),
     ('flip', 'Flip 0 / 1', '', '0'),
     ('depth', 'Depth (0 = through)', 'mm', '0 mm'),
     ('tenon_t', 'Tenon thickness (0 = full board; M&T 0 = auto)', 'mm', '0 mm'),
@@ -40,6 +41,7 @@ DEFAULT_EXPR = {p[0]: p[3] for p in PARAMS}
 RELIEF_NAMES = ['None (square)', 'Dogbones', 'Rounded (M&T and tabs)', 'T-bones sideways', 'T-bones deep']
 STYLE_NAMES = ['Fingers / tabs (auto)', 'Mortise & tenon']
 SPACE_NAMES = ['Auto (gap = half a tenon)', 'Even (gap = tenon)', 'Fixed gap']
+SIZE_NAMES = ['x board thickness', 'Count per side', 'Fixed width']
 # dialog: short labels (Fusion cuts labels after ~8 characters), the explanation goes in the tooltip
 LABELS = {
     'style': ('Joint', 'Fingers / tabs: picked from how the boards meet (overlapping corner = fingers, '
@@ -55,7 +57,16 @@ LABELS = {
                           'the next finger, deep = further into the board. Rounded: rounded mortise ends and tenons '
                           '(finger joints then get dogbones).'),
     'count': ('Count', 'Number of fingers, tabs or tenons. 0 = auto.'),
-    'finger_w': ('Width', 'Target finger / tab width. 0 = auto (2 x the board thickness).'),
+    'finger_w': ('Width', 'Target finger / tab width; the edge is divided evenly, so they come out close to it.'),
+    'ratio': ('x board', 'Finger / tab width = this x the board thickness (2 = twice the board). Wider fingers: '
+                        '2.5 or 3. A short edge still gets at least 3 fingers (corner) or 1 tab, so they come out '
+                        'narrower there (the info line says so).'),
+    'size_by': ('Size by', 'How the fingers / tabs are sized. x board thickness: width = a multiple of the board '
+                           '(2 = twice the board). Count per side: that many fingers or tabs on the edge. Fixed width: '
+                           'close to that width. The matching board always follows (one joint cuts both boards); '
+                           'a corner always gets an odd count, so an even count goes up by one.'),
+    'pick': ('Tick', 'Tick a set of joints in one go: all, none, the corners, the tabs, or every joint of one board '
+                     '(e.g. Bottom = the 4 bottom joints of a drawer). Then tick or untick single joints below.'),
     'flip': ('Flip', 'Swap which board gets the end fingers (corner), or put tabs at the ends (end-on-face).'),
     'depth': ('Depth', 'How far tabs / tenons go into the other board. 0 = through (its full thickness).'),
     'tenon_t': ('Thick', 'Tenon thickness. 0 = auto: tabs use the full board, M&T uses 1/3 of the board '
@@ -67,9 +78,9 @@ LABELS = {
                             'Fixed = the Gap value (the group is centred).'),
     'mt_gap': ('Between', 'Fixed space between tenons.'),
     'end_gap': ('Glue', 'Blind M&T: the mortise is this much deeper than the tenon.'),
-    'which': ('Edit', 'All joints: the settings of the whole box. Pick one joint to see its real count and sizes '
-                      'and give it its own (type, bit, gap and corners stay shared).'),
     'reset': ('Reset', 'Put every setting back to how it was when this dialog opened.'),
+    'match': ('All ticked', 'Give every ticked joint all the settings of the joint the dialog shows (the first ticked '
+                            'one). A field you change already goes to every ticked joint by itself.'),
     'whole': ('Whole box', 'Ticked: click one board and every board of the box is picked too (all visible boards '
                            'in that component that touch it, directly or through other boards). '
                            'An open drawer (bottom + 4 sides) gets its 8 joints in one go.'),
@@ -80,8 +91,17 @@ whole_box_on = [False]   # the Whole box tick is remembered while Fusion runs
 # edit dialog: fields that can be automatic show the real size; they stay automatic until you change them
 AUTO_KEYS = ('count', 'finger_w', 'depth', 'tenon_t', 'tab_len', 'end_off')
 # whole box: settings one joint can have on its own (the rest - type, bit, gap, corners - are shared by the box)
-JOINT_KEYS = ('count', 'finger_w', 'flip', 'depth', 'tenon_t', 'tab_len', 'end_off', 'mt_space', 'mt_gap', 'end_gap')
-SHARED_INPUTS = ('style', 'bit', 'bit_custom', 'gap', 'gap_global', 'relief')
+JOINT_KEYS = ('count', 'finger_w', 'ratio', 'flip', 'depth', 'tenon_t', 'tab_len', 'end_off', 'mt_space', 'mt_gap',
+              'end_gap')
+SHARED_KEYS = ('style', 'bit_d', 'gap', 'relief')        # always for the whole box
+BUTT_KEYS = ('depth', 'tenon_t', 'tab_len', 'end_off', 'mt_space', 'mt_gap', 'end_gap')   # end-to-face joints only
+# whole box edit: the inputs that change the ticked joints (a change goes to every ticked joint)
+JOINT_INPUTS = ('size_by', 'count', 'finger_w', 'ratio', 'flip') + BUTT_KEYS
+DIFF_NAMES = {'finger_w': 'width', 'ratio': 'x board', 'tenon_t': 'thickness', 'tab_len': 'length', 'end_off': 'ends',
+              'mt_space': 'spacing', 'mt_gap': 'gap between', 'end_gap': 'glue room'}
+BOX_ONLY = ('eff', 'orig_eff', 'shared', 'jmodes', 'ticked', 'pairs', 'pair_names', 'picks', 'first_info', 'odd_note',
+            'last_count')
+BOX_STATE = ('mode', 'auto', 'shown', 'orig', 'orig_auto', 'busy') + BOX_ONLY
 
 
 def tip(inp):
@@ -391,29 +411,68 @@ def joint_specs(exprs, over, n):
     return [spec_from_exprs(dict(exprs, **over.get(j, {}))) for j in range(n)]
 
 
+UNITS = {p[0]: p[2] for p in PARAMS}
+
+
+def same_expr(a, b, k):
+    try:
+        um = design().unitsManager
+        return abs(um.evaluateExpression(a, UNITS[k]) - um.evaluateExpression(b, UNITS[k])) < 1e-7
+    except Exception:
+        return str(a).replace(' ', '') == str(b).replace(' ', '')
+
+
 def clean_over(over, exprs):
     """Own values of each joint, only where they differ from the box setting."""
-    um = design().unitsManager
-    units = {p[0]: p[2] for p in PARAMS}
     out = {}
     for j, d in (over or {}).items():
-        keep = {}
-        for k, e in d.items():
-            try:
-                same = abs(um.evaluateExpression(e, units[k]) - um.evaluateExpression(exprs[k], units[k])) < 1e-7
-            except Exception:
-                same = e.replace(' ', '') == exprs[k].replace(' ', '')
-            if not same:
-                keep[k] = e
+        keep = {k: e for k, e in d.items() if not same_expr(e, exprs[k], k)}
         if keep:
             out[int(j)] = keep
     return out
 
 
-def make_group(comp, boards, pidx, exprs, fixed=False, pre=None, over=None):
+def split_box(shared, eff):
+    """Whole box edit, OK: per joint setting the value most joints have becomes the box value (a tie keeps the
+    current one); joints with another value keep it as their own. Returns (box exprs, {joint: {key: expr}})."""
+    out = dict(shared)
+    for k in JOINT_KEYS:
+        groups = []                                     # [expr, how many]
+        for e in eff:
+            g = next((g for g in groups if same_expr(g[0], e[k], k)), None)
+            if g:
+                g[1] += 1
+            else:
+                groups.append([e[k], 1])
+        if groups:
+            top = max(g[1] for g in groups)
+            if not any(g[1] == top and same_expr(g[0], shared[k], k) for g in groups):
+                out[k] = next(g[0] for g in groups if g[1] == top)
+    return out, clean_over({j: dict(e) for j, e in enumerate(eff)}, out)
+
+
+def size_spec(exprs):
+    um = design().unitsManager
+    out = {}
+    for k in ('count', 'finger_w'):
+        try:
+            out[k] = um.evaluateExpression(exprs[k], UNITS[k])
+        except Exception:
+            out[k] = 0
+    return out
+
+
+def size_mode(spec):
+    """0 = x board thickness, 1 = count, 2 = fixed width (what layout() uses first)."""
+    return 1 if spec.get('count', 0) >= 1 else 2 if spec.get('finger_w', 0) > 0 else 0
+
+
+def make_group(comp, boards, pidx, exprs, fixed=False, pre=None, over=None, made=None):
     """One NM Joint custom feature for one or more joints between these boards (native bodies of comp):
     a base feature with one tool body per board operation + one combine per operation.
-    over = {joint index: {key: expression}}: joints of a box with their own count / sizes."""
+    over = {joint index: {key: expression}}: joints of a box with their own count / sizes.
+    made = the settings it was first made with (kept through edits; a drawer / cabinet rebuild compares
+    against them to find what you changed per joint)."""
     over = clean_over(over, exprs)
     infos, roles, ops = group_tools(boards, pidx, joint_specs(exprs, over, len(pidx)), fixed, pre)
     feats = comp.features
@@ -476,6 +535,7 @@ def make_group(comp, boards, pidx, exprs, fixed=False, pre=None, over=None):
     nv.addOrSetValue('pairs', json.dumps(roles))
     nv.addOrSetValue('ops', ops_key(ops))
     nv.addOrSetValue('over', json.dumps({str(j): sorted(d) for j, d in over.items()}))
+    nv.addOrSetValue('made', json.dumps(made if made is not None else exprs))
     nv.addOrSetValue('mode', infos[0]['mode'] if len(infos) == 1 else 'box')
     nv.addOrSetValue('tokA', boards[roles[0][0]].entityToken)       # first joint, for board()
     nv.addOrSetValue('tokB', boards[roles[0][1]].entityToken)
@@ -616,8 +676,22 @@ def create_all(bodies, exprs):
         boards2 = [boards[i] for i in used]
         pidx2 = [(used.index(ia), used.index(ib)) for ia, ib in good]
         pre = {(used.index(ia), used.index(ib)): built[(ia, ib)] for ia, ib in good}
+        over, keys = {}, {}
+        for j, (ia, ib) in enumerate(pidx2):    # a drawer / cabinet rebuild: put back what you changed per joint
+            key = (comp.name, frozenset((boards2[ia].name, boards2[ib].name)))
+            if key in carry:
+                over[j], keys[j] = dict(carry[key]), key
+                pre.pop((ia, ib), None)
         try:
-            cf, infos = make_group(comp, boards2, pidx2, exprs, pre=pre)
+            try:
+                cf, infos = make_group(comp, boards2, pidx2, exprs, pre=pre, over=over)
+            except jc.JointError as e:
+                if not over:
+                    raise
+                carry_failed.extend('%s: %s (%s)' % (k[0], ' / '.join(sorted(k[1])), e) for k in keys.values())
+                cf, infos = make_group(comp, boards2, pidx2, exprs)
+                keys = {}
+            carry_used.update(keys.values())
             lines += [describe(info) for info in infos]
             made += len(infos)
         except jc.JointError as e:
@@ -625,6 +699,34 @@ def create_all(bodies, exprs):
     if not made:
         lines.insert(0, 'No joints: the selected boards do not overlap or touch.')
     return made, lines
+
+
+# drawer / cabinet rebuild (nm_edit): per joint settings you changed in the whole box edit, put back by create_all
+carry = {}           # (component name, frozenset of the two board names) -> {key: expression}
+carry_used = set()
+carry_failed = []
+
+
+def joint_memo(comp, out):
+    """What you changed per joint (whole box edit) in the NM joints of this component, against the settings they
+    were made with, keyed by component and board names (the rebuild makes new boards with the same names)."""
+    feats = comp.features.customFeatures
+    for i in range(feats.count):
+        cf = feats.item(i)
+        nv = cf.customNamedValues
+        if not (is_group(cf) and nv.isExistingValue('pairs')):
+            continue
+        boards = group_boards(cf)
+        shared = exprs_from_feature(cf)
+        made = json.loads(nv.value('made')) if nv.isExistingValue('made') else shared
+        over = group_over(cf)
+        for j, (ia, ib) in enumerate(json.loads(nv.value('pairs'))):
+            if not (boards[ia] and boards[ib]):
+                continue
+            e = dict(shared, **over.get(j, {}))
+            d = {k: e[k] for k in JOINT_KEYS if not same_expr(e[k], made.get(k, DEFAULT_EXPR[k]), k)}
+            if d:
+                out[(comp.name, frozenset((boards[ia].name, boards[ib].name)))] = d
 
 
 # ----------------------------------------------------------------------------------------------- dialog
@@ -682,8 +784,14 @@ def add_inputs(inputs, exprs, with_selection):
     rl = tip(inputs.addDropDownCommandInput('relief', L('relief'), adsk.core.DropDownStyles.TextListDropDownStyle))
     for i, n in enumerate(RELIEF_NAMES):
         rl.listItems.add(n, str(int(float(exprs['relief']))) == str(i))
+    sb = tip(inputs.addDropDownCommandInput('size_by', L('size_by'), adsk.core.DropDownStyles.TextListDropDownStyle))
+    mode = size_mode(size_spec(exprs))
+    for i, n in enumerate(SIZE_NAMES):
+        sb.listItems.add(n, i == mode)
     tip(inputs.addIntegerSpinnerCommandInput('count', L('count'), 0, 99, 1, int(float(exprs['count']))))
+    edit_state['last_count'] = int(float(exprs['count']))
     tip(inputs.addValueInput('finger_w', L('finger_w'), 'mm', adsk.core.ValueInput.createByString(exprs['finger_w'])))
+    tip(inputs.addFloatSpinnerCommandInput('ratio', L('ratio'), '', 1, 6, 0.5, ratio_of(exprs)))
     tip(inputs.addBoolValueInput('flip', L('flip'), True, '', exprs['flip'].strip() not in ('0', '0.0', '')))
     grp = inputs.addGroupCommandInput('butt', 'End-to-face joints (tab & slot, mortise & tenon)')
     gi = grp.children
@@ -700,6 +808,18 @@ def add_inputs(inputs, exprs, with_selection):
         rb = tip(inputs.addBoolValueInput('reset', L('reset'), False, '', False))
         rb.text = 'Back to how it was'
     show_for_style(inputs, mt)
+
+
+def ratio_of(exprs):
+    e = str(exprs.get('ratio', '2'))
+    try:
+        r = float(e)
+    except ValueError:
+        try:
+            r = design().unitsManager.evaluateExpression(e, '')
+        except Exception:
+            r = 2.0
+    return r if r > 0 else 2.0
 
 
 def apply_exprs(inputs, exprs):
@@ -731,6 +851,9 @@ def apply_exprs(inputs, exprs):
     inputs.itemById('mt_space').listItems.item(int(float(exprs['mt_space']))).isSelected = True
     inputs.itemById('flip').value = exprs['flip'].strip() not in ('0', '0.0', '')
     inputs.itemById('count').value = int(float(exprs['count']))
+    edit_state['last_count'] = int(float(exprs['count']))
+    inputs.itemById('ratio').value = ratio_of(exprs)
+    inputs.itemById('size_by').listItems.item(size_mode(size_spec(exprs))).isSelected = True
     for k in ('finger_w', 'depth', 'tenon_t', 'tab_len', 'end_off', 'mt_gap', 'end_gap'):
         inputs.itemById(k).expression = exprs[k]
     show_for_style(inputs, int(float(exprs['style'])) == 1)
@@ -738,13 +861,24 @@ def apply_exprs(inputs, exprs):
 
 def show_for_style(inputs, mt):
     # fingers / flip mean nothing for a mortise & tenon; spacing and glue room only for M&T
-    for k in ('finger_w', 'flip'):
-        inputs.itemById(k).isVisible = not mt
+    inputs.itemById('flip').isVisible = not mt
+    show_size(inputs, mt)
     for k in ('mt_space', 'end_gap'):
         inputs.itemById(k).isVisible = mt
     inputs.itemById('mt_gap').isVisible = mt and inputs.itemById('mt_space').selectedItem.index == 2
     # editing a box-corner joint: the end-to-face settings do nothing, so hide them
     inputs.itemById('butt').isVisible = edit_state.get('mode') != 'corner'
+
+
+def show_size(inputs, mt=None):
+    """Size by: only the field it uses shows (a mortise & tenon only has its count)."""
+    if mt is None:
+        mt = inputs.itemById('style').selectedItem.index == 1
+    sb = inputs.itemById('size_by').selectedItem.index
+    inputs.itemById('size_by').isVisible = not mt
+    inputs.itemById('count').isVisible = mt or sb == 1
+    inputs.itemById('finger_w').isVisible = not mt and sb == 2
+    inputs.itemById('ratio').isVisible = not mt and sb == 0
 
 
 def read_inputs(inputs):
@@ -760,12 +894,20 @@ def read_inputs(inputs):
     auto = edit_state.get('auto', {})
     v = lambda k: '0 mm' if auto.get(k) else inputs.itemById(k).expression
     gap = 'nmj_gap' if inputs.itemById('gap_global').value else v('gap')
+    mt = inputs.itemById('style').selectedItem.index == 1
+    sb = inputs.itemById('size_by').selectedItem.index
+    if mt:                                      # tenons: count only (0 = auto)
+        count, fw = ('0' if auto.get('count') else str(inputs.itemById('count').value)), v('finger_w')
+    else:                                       # Size by decides; the other field goes back to 0
+        count = str(inputs.itemById('count').value) if sb == 1 else '0'
+        fw = inputs.itemById('finger_w').expression if sb == 2 else '0 mm'
     return {'gap': gap, 'bit_d': bit, 'relief': str(inputs.itemById('relief').selectedItem.index),
-            'count': '0' if auto.get('count') else str(inputs.itemById('count').value), 'finger_w': v('finger_w'),
+            'count': count, 'finger_w': fw,
             'flip': '1' if inputs.itemById('flip').value else '0', 'depth': v('depth'),
             'tenon_t': v('tenon_t'), 'tab_len': v('tab_len'), 'end_off': v('end_off'),
             'style': str(inputs.itemById('style').selectedItem.index), 'end_gap': v('end_gap'),
-            'mt_space': str(inputs.itemById('mt_space').selectedItem.index), 'mt_gap': v('mt_gap')}
+            'mt_space': str(inputs.itemById('mt_space').selectedItem.index), 'mt_gap': v('mt_gap'),
+            'ratio': '%g' % round(inputs.itemById('ratio').value, 3)}
 
 
 def mm(v):
@@ -791,6 +933,8 @@ def now_text(info, spec):
         lines = ['Now: %d tabs of %s mm, %s mm deep' % (info['tabs_or_fingers'], mm(info['width_mm']), mm(info['depth_mm']))]
         names = (('count', 'count'), ('tab_len', 'length'))
     autos = [label for k, label in names if spec.get(k, 0) <= 0]
+    if info.get('style') != jc.STYLE_MT and spec.get('finger_w', 0) <= 0 and spec.get('tab_len', 0) <= 0:
+        autos = [a + (' (%g x board)' % spec.get('ratio', 2) if a in ('width', 'length') else '') for a in autos]
     if autos:
         lines.append('Auto: %s (type 0 for auto)' % ', '.join(autos))
     lines.append('Boards %s / %s mm thick, bit %s, gap %s mm/side' % (mm(ta), mm(tb), mm(spec['bit_d'] * 10), mm(spec['gap'] * 10)))
@@ -808,15 +952,20 @@ def edit_preview(inputs):
         return
     try:
         ensure_rolled(cf)
-        spec = spec_from_exprs(read_inputs(inputs))
-        if 'view' in edit_state:
-            box_preview(inputs, spec)
+        if 'eff' in edit_state:
+            box_preview(inputs)
             return
+        spec = spec_from_exprs(read_inputs(inputs))
         A, B = board(cf, 'A'), board(cf, 'B')
         if not (A and B):
             raise jc.JointError('The boards of this joint can no longer be found.')
         info, _ = jc.build_tools(A, B, spec, True)
-        inputs.itemById('info').text = now_text(info, spec)
+        edit_state['hl_data'] = (cf.parentComponent, [info], [0])
+        edit_state['first_info'] = info
+        txt = now_text(info, spec)
+        if edit_state.get('odd_note'):
+            txt = edit_state['odd_note'] + '\n' + txt
+        inputs.itemById('info').text = txt
         fill_auto(inputs, info)
     except jc.JointError as e:
         inputs.itemById('info').text = '! %s' % e
@@ -825,36 +974,146 @@ def edit_preview(inputs):
         log(traceback.format_exc())
 
 
-def box_preview(inputs, spec):
-    """Whole box edit: all joints (box settings) or the one joint picked under Edit."""
-    cf, view = edit_state['cf'], edit_state['view']
+def box_mode():
+    """'corner' when every ticked joint is a box corner (the end-to-face fields then hide), else 'box'."""
+    modes, t = edit_state.get('jmodes') or [], edit_state.get('ticked') or []
+    return 'corner' if t and modes and all(j < len(modes) and modes[j] == 'corner' for j in t) else 'box'
+
+
+def row_text(info, spec):
+    """One line per joint in the whole box edit: what it is right now and how it is sized."""
+    if info['mode'] == 'corner':
+        s = '%d fingers x %s mm' % (info['segments'], mm(info['width_mm']))
+    elif info.get('style') == jc.STYLE_MT:
+        n = info['tabs_or_fingers']
+        s = '%d tenon%s x %s mm' % (n, 's' if n > 1 else '', mm(info['width_mm']))
+    else:
+        s = '%d tabs x %s mm' % (info['tabs_or_fingers'], mm(info['width_mm']))
+    if info.get('style') != jc.STYLE_MT:
+        m = size_mode(spec)
+        s += ('   %g x board' % spec.get('ratio', 2) if m == 0 and spec.get('tab_len', 0) <= 0 else
+              '   fixed length' if m == 0 else '   fixed count' if m == 1 else '   fixed width')
+    return '%s / %s:  %s%s' % (info['A'].name, info['B'].name, s, '   !' if info['notes'] else '')
+
+
+def ticked_differ(specs, t):
+    """Names of the settings that are not the same for every ticked joint."""
+    modes = edit_state.get('jmodes') or []
+    mt = specs[t[0]].get('style', 0) == 1
+    out = []
+    if not mt and len({size_mode(specs[j]) for j in t}) > 1:
+        out.append('size by')
+    use = {'count': 1, 'finger_w': 2, 'ratio': 0}       # only compare where that sizing is in use
+    for k in JOINT_KEYS:
+        js = [j for j in t if k not in BUTT_KEYS or (j < len(modes) and modes[j] != 'corner')]
+        if k in use and not mt:
+            js = [j for j in js if size_mode(specs[j]) == use[k]]
+        if len(js) > 1 and max(specs[j][k] for j in js) - min(specs[j][k] for j in js) > 1e-6:
+            out.append(DIFF_NAMES.get(k, k))
+    return out
+
+
+def box_preview(inputs):
+    """Whole box edit: every joint's line, and the first ticked joint in detail."""
+    cf = edit_state['cf']
     boards = group_boards(cf)
     if any(b is None for b in boards):
         raise jc.JointError('The boards of this joint can no longer be found.')
-    pidx = [tuple(p) for p in json.loads(cf.customNamedValues.value('pairs'))]
-    if view != 'all':
-        ia, ib = pidx[view]
-        info, _ = jc.build_tools(boards[ia], boards[ib], spec, True)
-        own = sorted(clean_over({view: {k: read_inputs(inputs)[k] for k in JOINT_KEYS}}, edit_state['shared']).get(view, {}))
-        head = ('Own settings: %s.' % ', '.join(LABELS[k][0].lower() for k in own) if own
-                else 'Same as the box settings.')
-        inputs.itemById('info').text = (head + ' Type, bit, gap and corners: Edit > All joints.\n'
-                                        + now_text(info, spec))
-        fill_auto(inputs, [info])
-        return
     ex = read_inputs(inputs)
-    over = clean_over(edit_state['over'], ex)
-    infos, _, _ = group_tools(boards, pidx, joint_specs(ex, over, len(pidx)), True)
+    base = dict(edit_state['shared'], **{k: ex[k] for k in SHARED_KEYS})
+    specs = [spec_from_exprs(dict(base, **e)) for e in edit_state['eff']]
+    infos, _, _ = group_tools(boards, edit_state['pairs'], specs, True)
     edit_state['jmodes'] = [i['mode'] for i in infos]
-    lines = []
+    edit_state['hl_data'] = (cf.parentComponent, infos, list(edit_state['ticked']))   # drawn in EditPreview
     for j, i in enumerate(infos):
-        lines.append(describe(i) + ('   (own %s)' % ', '.join(LABELS[k][0].lower() for k in sorted(over[j]))
-                                    if j in over else ''))
-    differ = fill_auto(inputs, [i for j, i in enumerate(infos)], over)
-    head = 'Whole box: these settings go to every joint (pick one under Edit for its own).'
-    if differ:
-        head += '\nAuto, differs per joint: %s.' % ', '.join(differ)
-    inputs.itemById('info').text = head + '\n' + '\n'.join(lines)
+        row = jinp(inputs, 'jl%d' % j)
+        txt = row_text(i, specs[j])
+        if row and row.text != txt:                     # an unchanged write still fires inputChanged
+            row.text = txt
+    mode = box_mode()
+    if mode != edit_state.get('mode'):
+        edit_state['mode'] = mode
+        inputs.itemById('butt').isVisible = mode != 'corner'
+    t = edit_state['ticked']
+    if not t:
+        edit_state.pop('first_info', None)
+        inputs.itemById('info').text = ('Tick the joints to change (Tick > Every joint of Bottom = the bottom joints). '
+                                        'Type, bit, gap and corners are for the whole box.')
+        return
+    first = infos[t[0]]
+    edit_state['first_info'] = first
+    fill_auto(inputs, [infos[j] for j in t])
+    lines = ['%d of %d joints ticked: a field you change goes to all of them, the other fields stay as each joint '
+             'has them. Type, bit, gap and corners: whole box.' % (len(t), len(infos))]
+    dk = ticked_differ(specs, t)
+    if dk:
+        lines.append('Ticked joints differ in %s; the fields show %s / %s.' % (', '.join(dk), first['A'].name,
+                                                                                first['B'].name))
+    if edit_state.get('odd_note'):
+        lines.append(edit_state['odd_note'])
+    lines.append(now_text(first, specs[t[0]]))
+    for j in t[1:]:
+        if infos[j]['notes']:
+            lines.append('! %s / %s: %s' % (infos[j]['A'].name, infos[j]['B'].name, '; '.join(infos[j]['notes'])))
+    inputs.itemById('info').text = '\n'.join(lines)
+
+
+HL_SHOWN, HL_TICKED = (0, 140, 255), (255, 205, 0)      # blue = the joint the fields show, yellow = other ticks
+HL_OPACITY = 0.35                                         # 65 % see-through
+
+
+def clear_highlight(keep_data=False):
+    if not keep_data:
+        edit_state.pop('hl_data', None)
+        edit_state.pop('hl_cache', None)
+    g = edit_state.pop('hl', None)
+    try:
+        if g and g.isValid:
+            g.deleteMe()
+    except Exception:
+        pass
+
+
+HL_PAD = 0.01                                             # cm: 0.1 mm proud of the board faces, so they don't flicker
+
+
+def highlight(comp, infos, ticked):
+    """Edit dialog: the slots / fingers of the ticked joints (or the one joint) drawn on the model as custom
+    graphics. Called from executePreview: Fusion wipes graphics made in inputChanged when it restarts its
+    preview, which made them come and go. Never stops the dialog: a failure is only logged."""
+    clear_highlight(keep_data=True)
+    try:
+        if ticked:
+            g = comp.customGraphicsGroups.add()
+            edit_state['hl'] = g
+            # Fusion restarts the preview often (every redraw of the dialog): build the shapes (boxes + dogbones,
+            # united) once per set of joints and reuse them, so a restart only re-adds them. Rebuilding them every
+            # time made orbiting jitter.
+            cache = edit_state.get('hl_cache')
+            if not cache or cache[0] is not infos:
+                cache = (infos, {})
+                edit_state['hl_cache'] = cache
+            shapes = cache[1]
+            for n, j in enumerate(ticked):
+                rgb = HL_SHOWN if n == 0 else HL_TICKED
+                c = adsk.core.Color.create(rgb[0], rgb[1], rgb[2], 255)
+                fx = adsk.fusion.CustomGraphicsBasicMaterialColorEffect.create(c, c, c, c, 0.0, HL_OPACITY)
+                if j not in shapes:
+                    shapes[j] = jc.finger_bodies(infos[j], HL_PAD) if j < len(infos) else []
+                for box in shapes[j]:
+                    try:
+                        e = g.addBRepBody(box)          # the fingers / tabs, exact size
+                    except Exception:                   # a cached body Fusion no longer takes: use a copy
+                        e = g.addBRepBody(adsk.fusion.TemporaryBRepManager.get().copy(box))
+                    e.color = fx
+                    e.depthPriority = 1
+                    try:
+                        e.isSelectable = False
+                    except Exception:
+                        pass
+        app.activeViewport.refresh()
+    except Exception:
+        log('highlight failed:\n' + traceback.format_exc())
 
 
 def resolved(info):
@@ -908,34 +1167,185 @@ def auto_of(exprs):
     return {k: um.evaluateExpression(exprs[k], 'mm' if k != 'count' else '') <= 0 for k in AUTO_KEYS}
 
 
-def save_view(inputs):
-    """Whole box edit: keep what the dialog shows for the current view (box settings or one joint's own)."""
-    ex = read_inputs(inputs)
-    v = edit_state['view']
-    if v == 'all':
-        edit_state['shared'] = ex
-    else:
-        edit_state['over'][v] = {k: ex[k] for k in JOINT_KEYS}
-        edit_state['over'] = clean_over(edit_state['over'], edit_state['shared'])
+def add_joint_list(inputs, boards, pairs):
+    """Whole box edit: quick picks, then a tick per joint with its live size."""
+    nm_ = lambda i: boards[i].name if boards[i] else '?'
+    pk = tip(inputs.addDropDownCommandInput('pick', LABELS['pick'][0], adsk.core.DropDownStyles.TextListDropDownStyle))
+    picks = [('Pick a set...', None), ('All joints', 'all'), ('None', 'none'), ('Corners (fingers)', 'corner'),
+             ('End on face (tabs / tenons)', 'butt')]
+    seen = []
+    for ia, ib in pairs:
+        for n in (nm_(ia), nm_(ib)):
+            if n not in seen:
+                seen.append(n)
+    picks += [('Every joint of %s' % n, ('board', n)) for n in seen]
+    for i, (text, _) in enumerate(picks):
+        pk.listItems.add(text, i == 0)
+    edit_state['picks'] = [v for _, v in picks]
+    rows = min(max(len(pairs), 1), 12)
+    try:
+        tb = inputs.addTableCommandInput('joints', 'Joints', 2, '1:12')
+        tb.isFullWidth = True
+        tb.maximumVisibleRows = rows            # max first: a min above the current max is 'invalid value'
+        tb.minimumVisibleRows = rows
+        tb.tablePresentationStyle = adsk.core.TablePresentationStyles.transparentBackgroundTablePresentationStyle
+        ci = tb.commandInputs
+        for j, (ia, ib) in enumerate(pairs):
+            cb = ci.addBoolValueInput('jt%d' % j, '', True, '', True)
+            tx = ci.addTextBoxCommandInput('jl%d' % j, '', '%s / %s' % (nm_(ia), nm_(ib)), 1, True)
+            tb.addCommandInput(cb, j, 0)
+            tb.addCommandInput(tx, j, 1)
+    except Exception:
+        log('joint table failed, plain ticks instead:\n' + traceback.format_exc())
+        old = inputs.itemById('joints')
+        if old:
+            old.deleteMe()
+        for j, (ia, ib) in enumerate(pairs):
+            inputs.addBoolValueInput('jt%d' % j, '%s / %s' % (nm_(ia), nm_(ib)), True, '', True)
+    mb = tip(inputs.addBoolValueInput('match', LABELS['match'][0], False, '', False))
+    mb.text = 'Make all like the one shown'
 
 
-def show_view(inputs, v):
-    edit_state['view'] = v
+def jinp(inputs, iid):
+    """A tick / line of the joint list (looked up in the table too, in case itemById does not search it)."""
+    try:
+        x = inputs.itemById(iid)
+    except Exception:
+        x = None
+    if x is None:
+        try:
+            tb = adsk.core.TableCommandInput.cast(inputs.itemById('joints'))
+            x = tb.commandInputs.itemById(iid) if tb else None
+        except Exception:
+            x = None
+    return x
+
+
+def tick_set(inputs, what):
+    names, modes = edit_state['pair_names'], edit_state.get('jmodes') or []
+    for j in range(len(names)):
+        if what in ('all', 'none'):
+            on = what == 'all'
+        elif what in ('corner', 'butt'):
+            on = j < len(modes) and (modes[j] == 'corner') == (what == 'corner')
+        else:
+            on = what[1] in names[j]
+        jinp(inputs, 'jt%d' % j).value = on
+
+
+def read_ticks(inputs):
+    """The ticked joints, the one the fields show first: the ticked joint whose settings most of the others
+    share (a tie: the first in the list). So with All ticked the fields show what most joints have."""
+    t = [j for j in range(len(edit_state['eff'])) if jinp(inputs, 'jt%d' % j).value]
+    eff = edit_state['eff']
+    alike = lambda a, b: all(same_expr(eff[a][k], eff[b][k], k) for k in JOINT_KEYS)
+    if len(t) > 2:
+        best = max(t, key=lambda j: (sum(alike(j, o) for o in t), -t.index(j)))
+        t.remove(best)
+        t.insert(0, best)
+    edit_state['ticked'] = t
+
+
+def show_joint(inputs, take_shared=True):
+    """Whole box edit: the fields show the first ticked joint (type, bit, gap and corners stay as they are)."""
+    if take_shared:
+        ex = read_inputs(inputs)
+        edit_state['shared'].update({k: ex[k] for k in SHARED_KEYS})
+    t = edit_state['ticked']
     ex = dict(edit_state['shared'])
-    if v != 'all':
-        ex.update(edit_state['over'].get(v, {}))
-    modes = edit_state.get('jmodes') or []
-    edit_state['mode'] = 'box' if v == 'all' or v >= len(modes) else modes[v]
+    if t:
+        ex.update(edit_state['eff'][t[0]])
+    edit_state['mode'] = box_mode()
     edit_state['busy'] = True
     try:
         apply_exprs(inputs, ex)
-        for k in SHARED_INPUTS:
-            inputs.itemById(k).isEnabled = v == 'all'
+        for k in JOINT_INPUTS + ('match',):
+            inputs.itemById(k).isEnabled = bool(t)
     finally:
         edit_state['busy'] = False
     edit_state['auto'] = auto_of(ex)
     edit_state['shown'] = {}
     edit_preview(inputs)
+
+
+def put(keys, ex, mt):
+    """These settings (dialog values ex) go to every ticked joint; a corner gets an odd count."""
+    modes = edit_state.get('jmodes') or []
+    bumped = []
+    for j in edit_state['ticked']:
+        corner = j < len(modes) and modes[j] == 'corner'
+        for q in keys:
+            if corner and (q in BUTT_KEYS or (mt and q == 'count')):
+                continue                        # nothing a box corner uses
+            e = ex[q]
+            if q == 'count' and corner and not mt:
+                n = int(float(e))
+                if n > 0 and (n % 2 == 0 or n < 3):
+                    e = str(max(3, n + 1))
+                    bumped.append((n, int(e)))
+            edit_state['eff'][j][q] = e
+    if bumped:
+        edit_state['odd_note'] = ('A corner needs an odd count (the same board at both ends): the corners get %d '
+                                  'fingers.' % bumped[0][1])
+
+
+def commit(inputs, k):
+    """Whole box edit: a field you changed goes to every ticked joint (only that field; for the size: count,
+    width and x board together, as Size by sets them)."""
+    t = edit_state.get('ticked')
+    if not t:
+        return
+    ex = read_inputs(inputs)
+    mt = ex['style'] == '1'
+    if k == 'match':
+        put(JOINT_KEYS, ex, mt)
+        return
+    if k == 'size_by' and mt:
+        return
+    keys = ('count', 'finger_w', 'ratio') if k in ('size_by', 'count', 'finger_w', 'ratio') and not mt else (k,)
+    first = edit_state['eff'][t[0]]
+    if all(same_expr(ex[q], first[q], q) for q in keys):
+        return                                  # nothing new (or the dialog's own refill)
+    put(keys, ex, mt)
+
+
+def odd_count(inputs, inp):
+    """A box corner (all ticked joints corners, or one corner joint): even counts step on to the next odd one."""
+    v, last = inp.value, edit_state.get('last_count', 0)
+    if (edit_state.get('mode') == 'corner' and inputs.itemById('style').selectedItem.index != 1 and v > 0
+            and (v % 2 == 0 or v < 3)):
+        n = max(3, v + 1 if v > last else v - 1)
+        edit_state['busy'] = True
+        try:
+            inp.value = n
+        finally:
+            edit_state['busy'] = False
+        edit_state['odd_note'] = 'A corner needs an odd count (the same board at both ends): %d became %d.' % (v, n)
+        v = n
+    edit_state['last_count'] = v
+
+
+def size_changed(inputs):
+    """Size by changed: show its field; count / width start at what the joint has now."""
+    sb = inputs.itemById('size_by').selectedItem.index
+    auto, shown = edit_state.get('auto'), edit_state.setdefault('shown', {})
+    if auto is not None:
+        auto['count'], auto['finger_w'] = sb != 1, sb != 2
+        shown.pop('count', None)
+        shown.pop('finger_w', None)
+    fi = edit_state.get('first_info')
+    if fi:
+        r = resolved(fi)
+        edit_state['busy'] = True
+        try:
+            if sb == 1 and inputs.itemById('count').value <= 0:
+                inputs.itemById('count').value = int(r['count'])
+                edit_state['last_count'] = int(r['count'])
+            elif sb == 2 and inputs.itemById('finger_w').value <= 0:
+                inputs.itemById('finger_w').expression = '%s mm' % mm(r['finger_w'] * 10)
+        finally:
+            edit_state['busy'] = False
+    show_size(inputs)
 
 
 def selected_bodies(inputs):
@@ -971,20 +1381,39 @@ class InputChanged(adsk.core.InputChangedEventHandler):
             if edit_state.get('busy'):
                 return                                         # our own fill / reset
             k = args.input.id
+            if k == 'info' or (k.startswith('jl') and k[2:].isdigit()):
+                return                                         # display-only text the add-in writes itself: a
+                                                               # rebuild for each made opening the dialog lag ~4 s
+            box = 'eff' in edit_state
             if k in ('bodies', 'whole') and inputs.itemById('whole'):
                 if k == 'whole':
                     whole_box_on[0] = args.input.value
                 pick_whole_box(inputs)
                 return
-            if k == 'which':
-                save_view(inputs)
-                i = args.input.selectedItem.index
-                show_view(inputs, 'all' if i == 0 else i - 1)
+            if k == 'pick' and box:
+                what = edit_state['picks'][args.input.selectedItem.index]
+                if what is None:
+                    return
+                edit_state['busy'] = True
+                try:
+                    tick_set(inputs, what)
+                    args.input.listItems.item(0).isSelected = True
+                finally:
+                    edit_state['busy'] = False
+                read_ticks(inputs)
+                edit_state.pop('odd_note', None)
+                show_joint(inputs)
                 return
-            if k == 'reset' and 'view' in edit_state:
+            if k.startswith('jt') and box:
+                read_ticks(inputs)
+                edit_state.pop('odd_note', None)
+                show_joint(inputs)
+                return
+            if k == 'reset' and box:
                 edit_state['shared'] = dict(edit_state['orig'])
-                edit_state['over'] = {j: dict(d) for j, d in edit_state['orig_over'].items()}
-                show_view(inputs, edit_state['view'])
+                edit_state['eff'] = [dict(e) for e in edit_state['orig_eff']]
+                edit_state.pop('odd_note', None)
+                show_joint(inputs, False)
                 return
             if k == 'reset':
                 edit_state['busy'] = True
@@ -994,26 +1423,37 @@ class InputChanged(adsk.core.InputChangedEventHandler):
                     edit_state['busy'] = False
                 edit_state['auto'] = dict(edit_state['orig_auto'])
                 edit_state['shown'] = {}
+                edit_state.pop('odd_note', None)
                 edit_preview(inputs)
                 return
+            edit_state.pop('odd_note', None)
+            user = True
             if k in AUTO_KEYS and 'auto' in edit_state:
                 shown = edit_state.setdefault('shown', {})
                 v = args.input.value
                 if k not in shown or abs(v - shown[k]) > 1e-6:  # the user changed it
                     edit_state['auto'][k] = v <= 0                 # 0 = back to automatic
                     shown.pop(k, None)
-            if args.input.id in ('gap', 'gap_global'):
+                else:
+                    user = False
+            if k == 'count' and user:
+                odd_count(inputs, args.input)
+            if k in ('gap', 'gap_global'):
                 g = design().userParameters.itemByName('nmj_gap')
                 gv = g.value if g else 0.01
                 gi, gg = inputs.itemById('gap'), inputs.itemById('gap_global')
-                if args.input.id == 'gap' and abs(gi.value - gv) > 1e-9:
+                if k == 'gap' and abs(gi.value - gv) > 1e-9:
                     gg.value = False                           # own number typed: this joint only
-                elif args.input.id == 'gap_global' and gg.value and abs(gi.value - gv) > 1e-9:
+                elif k == 'gap_global' and gg.value and abs(gi.value - gv) > 1e-9:
                     gi.value = gv                              # back to the global value
-            elif args.input.id == 'bit':
+            elif k == 'bit':
                 inputs.itemById('bit_custom').isVisible = (args.input.selectedItem.index == args.input.listItems.count - 1)
-            elif args.input.id in ('style', 'mt_space'):
+            elif k in ('style', 'mt_space'):
                 show_for_style(inputs, inputs.itemById('style').selectedItem.index == 1)
+            elif k == 'size_by':
+                size_changed(inputs)
+            if box and user and k in JOINT_INPUTS + ('match',):
+                commit(inputs, k)
             edit_preview(inputs)
         except Exception:
             log(traceback.format_exc())
@@ -1045,7 +1485,7 @@ class CreateExecute(adsk.core.CommandEventHandler):
 class CreateCreated(adsk.core.CommandCreatedEventHandler):
     def notify(self, args):
         try:
-            for k in ('mode', 'auto', 'shown', 'orig', 'orig_auto', 'busy', 'view', 'over', 'orig_over', 'shared', 'jmodes'):
+            for k in BOX_STATE:
                 edit_state.pop(k, None)           # new joints: every setting, 0 = auto as typed
             cmd = args.command
             cmd.isExecutedWhenPreEmpted = False      # starting another command = Cancel, not OK (an auto-OK mid-build crashed Fusion)
@@ -1066,6 +1506,21 @@ class CreateCreated(adsk.core.CommandCreatedEventHandler):
 
 
 # --- edit (double-click in the timeline)
+class EditPreview(adsk.core.CommandEventHandler):
+    def notify(self, args):
+        # Fusion undoes the roll-back when it restarts the preview: roll back again first, so the boards show
+        # without this joint and the highlight is not drawn over the old slots.
+        try:
+            cf = edit_state.get('cf')
+            if cf and 'marker' in edit_state:
+                ensure_rolled(cf)
+        except Exception:
+            log('preview roll-back failed:\n' + traceback.format_exc())
+        d = edit_state.get('hl_data')
+        if d:
+            highlight(*d)
+
+
 class EditActivate(adsk.core.CommandEventHandler):
     def notify(self, args):
         try:
@@ -1126,21 +1581,25 @@ def edit_group(cf, exprs, over=None):
                 p.expression = exprs[pid]
     else:                                       # other tool bodies -> rebuild in place
         comp = cf.parentComponent
+        nv = cf.customNamedValues
+        made = json.loads(nv.value('made')) if nv.isExistingValue('made') else None
         cf.deleteMe()
-        make_group(comp, boards, pidx, exprs, fixed=True, over=over)
+        make_group(comp, boards, pidx, exprs, fixed=True, over=over, made=made)
 
 
 class EditExecute(adsk.core.CommandEventHandler):
     def notify(self, args):
+        clear_highlight()
         try:
             cf = edit_state['cf']
             exprs = read_inputs(args.command.commandInputs)
             if 'marker' in edit_state:
                 ensure_rolled(cf)
             if is_group(cf):
-                if 'view' in edit_state:
-                    save_view(args.command.commandInputs)
-                    edit_group(cf, edit_state['shared'], edit_state['over'])
+                if 'eff' in edit_state:
+                    sh = dict(edit_state['shared'], **{k: exprs[k] for k in SHARED_KEYS})
+                    shared, over = split_box(sh, edit_state['eff'])
+                    edit_group(cf, shared, over)
                 else:
                     edit_group(cf, exprs)
                 return
@@ -1174,6 +1633,7 @@ class EditExecute(adsk.core.CommandEventHandler):
 
 class EditDestroy(adsk.core.CommandEventHandler):
     def notify(self, args):
+        clear_highlight()
         try:
             restore_marker()
         except Exception:
@@ -1183,6 +1643,7 @@ class EditDestroy(adsk.core.CommandEventHandler):
 class EditCreated(adsk.core.CommandCreatedEventHandler):
     def notify(self, args):
         try:
+            clear_highlight()                      # a leftover from a dialog that ended oddly
             cf = adsk.fusion.CustomFeature.cast(ui.activeSelections.item(0).entity)
             edit_state['cf'] = cf
             edit_state['mode'] = cf.customNamedValues.value('mode')
@@ -1192,21 +1653,23 @@ class EditCreated(adsk.core.CommandCreatedEventHandler):
             edit_state['orig_auto'] = {k: um.evaluateExpression(exprs[k], 'mm' if k != 'count' else '') <= 0 for k in AUTO_KEYS}
             edit_state['auto'] = dict(edit_state['orig_auto'])
             edit_state['shown'] = {}
-            for k in ('view', 'over', 'orig_over', 'shared', 'jmodes'):
+            for k in BOX_ONLY:
                 edit_state.pop(k, None)
             cmd = args.command
             cmd.isExecutedWhenPreEmpted = False      # starting another command = Cancel, not OK (an auto-OK mid-build crashed Fusion)
-            cmd.setDialogInitialSize(380, 560)
+            cmd.setDialogInitialSize(430, 760) if edit_state['mode'] == 'box' else cmd.setDialogInitialSize(380, 560)
             if edit_state['mode'] == 'box':
                 boards = group_boards(cf)
                 nm_ = lambda i: boards[i].name if boards[i] else '?'
-                wh = tip(cmd.commandInputs.addDropDownCommandInput('which', LABELS['which'][0],
-                                                                   adsk.core.DropDownStyles.TextListDropDownStyle))
-                wh.listItems.add('All joints (box settings)', True)
+                pairs = [tuple(p) for p in json.loads(cf.customNamedValues.value('pairs'))]
                 over = group_over(cf)
-                for j, (ia, ib) in enumerate(json.loads(cf.customNamedValues.value('pairs'))):
-                    wh.listItems.add('%s / %s%s' % (nm_(ia), nm_(ib), '  *' if j in over else ''), False)
-                edit_state.update(view='all', over=over, orig_over={j: dict(d) for j, d in over.items()}, shared=dict(exprs))
+                eff = [{k: over.get(j, {}).get(k, exprs[k]) for k in JOINT_KEYS} for j in range(len(pairs))]
+                edit_state.update(eff=eff, orig_eff=[dict(e) for e in eff], shared=dict(exprs), pairs=pairs,
+                                  ticked=list(range(len(pairs))), pair_names=[(nm_(a), nm_(b)) for a, b in pairs])
+                add_joint_list(cmd.commandInputs, boards, pairs)
+                if eff:                             # the fields show the first ticked joint
+                    exprs = dict(exprs, **eff[0])
+                    edit_state['auto'] = auto_of(exprs)
             add_inputs(cmd.commandInputs, exprs, False)
             if edit_state['mode'] == 'box':
                 cmd.commandInputs.itemById('info').text = 'Whole box: %s.' % ', '.join(b.name for b in boards if b)
@@ -1214,7 +1677,8 @@ class EditCreated(adsk.core.CommandCreatedEventHandler):
                 cmd.commandInputs.itemById('info').text = 'Mode: %s joint between %s and %s.' % (
                     edit_state['mode'], (board(cf, 'A') or cf).name, (board(cf, 'B') or cf).name)
             for ev, h in ((cmd.activate, EditActivate()), (cmd.execute, EditExecute()),
-                          (cmd.destroy, EditDestroy()), (cmd.inputChanged, InputChanged())):
+                          (cmd.destroy, EditDestroy()), (cmd.inputChanged, InputChanged()),
+                          (cmd.executePreview, EditPreview())):
                 ev.add(h)
                 handlers.append(h)
         except Exception:

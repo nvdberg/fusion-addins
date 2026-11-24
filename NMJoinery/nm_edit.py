@@ -128,7 +128,9 @@ def size_changes(rec, old, new):
             return isinstance(a, str) and isinstance(b, str) and abs(mm(a) - mm(b)) < TOL
         except Exception:
             return False
-    diff = [k for k in set(old) | set(new) if not k.startswith('_') and k != 'units' and not same(old.get(k), new.get(k))]
+    dflt = M.DEFAULTS                           # an item made before a setting existed had its default
+    diff = [k for k in set(old) | set(new) if not k.startswith('_') and k != 'units'
+            and not same(old.get(k, dflt.get(k)), new.get(k, dflt.get(k)))]
     out = []
     if kind == 'drawer':
         same_t = lambda o: abs(mm(o['bt']) - mm(o['t'])) < TOL
@@ -184,6 +186,17 @@ def rebuild(rec, new):
             occ = root.occurrences.itemByName(n)
         found.append(occ)
     place = [occ.transform2 if occ else None for occ in found]      # same order as the build makes them
+    memo = {}                                   # per joint settings you changed (NM Box edit): put back after
+    for occ in found:
+        if not occ:
+            continue
+        try:
+            comps = [occ.component] + [occ.component.allOccurrences.item(i).component
+                                       for i in range(occ.component.allOccurrences.count)]
+            for c in comps:
+                nm.joint_memo(c, memo)
+        except Exception:
+            nm.log('edit: joint settings not read:\n' + traceback.format_exc())
     for occ in found:
         if occ:
             occ.deleteMe()
@@ -203,7 +216,20 @@ def rebuild(rec, new):
     if left:
         nm.log('edit: parameters still in use elsewhere, kept: %s' % ', '.join(left))
     n0 = root.occurrences.count
-    made(rec['kind'], new)
+    nm.carry.clear()
+    nm.carry.update(memo)
+    nm.carry_used.clear()
+    del nm.carry_failed[:]
+    try:
+        made(rec['kind'], new)
+    finally:
+        lost = ['%s: %s' % (k[0], ' / '.join(sorted(k[1]))) for k in memo if k not in nm.carry_used]
+        lost = [x for x in lost if not any(f.startswith(x + ' (') for f in nm.carry_failed)] + list(nm.carry_failed)
+        nm.carry.clear()
+        nm.carry_used.clear()
+        del nm.carry_failed[:]
+    if memo:
+        nm.log('edit: own joint settings put back on %d of %d joints' % (len(memo) - len(lost), len(memo)))
     moved = False
     for i in range(n0, root.occurrences.count):
         tf = place[i - n0] if i - n0 < len(place) else None
@@ -216,6 +242,7 @@ def rebuild(rec, new):
                 des.snapshots.add()             # capture the position, or the next recompute moves it back
         except Exception:
             nm.log('edit: position not captured:\n' + traceback.format_exc())
+    return lost
 
 
 def apply(cf, new):
@@ -232,7 +259,13 @@ def apply(cf, new):
                     p.expression = e
         cf.customNamedValues.addOrSetValue('opts', json.dumps(new))
         return 'sizes'
-    rebuild(rec, new)
+    lost = rebuild(rec, new)
+    if lost:
+        nm.log('edit: own joint settings not put back: %s' % '; '.join(lost))
+        nm.ui.messageBox('Rebuilt. These joints had their own settings (NM Box edit) that could not be put back, '
+                         'because those boards no longer meet or the settings no longer fit:\n\n%s\n\n'
+                         'They use the drawer / cabinet settings now; double-click the NM Box item to change them '
+                         'again.' % '\n'.join(lost), 'NM Edit')
     return 'rebuilt'
 
 

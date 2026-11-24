@@ -110,6 +110,17 @@ class Frame:
         return _tbm().createCylinderOrCone(p(a), radius, p(b), radius)
 
 
+def finger_bodies(info, pad):
+    """B's fingers / tabs of a built joint as boxes of their exact size, plus the dogbones, for the edit highlight.
+    Boxes are grown by pad only across the joint line (axes 1 and 2) and dogbones only along the bit, where
+    their faces lie on the board faces: without it the two fight and flicker."""
+    fr, rngs, bones = info.get('fingers') or (None, [], [])
+    out = [fr.box([tuple(r[0]), (r[1][0] - pad, r[1][1] + pad), (r[2][0] - pad, r[2][1] + pad)]) for r in rngs]
+    out += [fr.cyl(ax, a - pad, b + pad, c, r) for ax, a, b, c, r in bones]
+    one = union(out)                          # one body: overlapping see-through parts would show darker
+    return [one] if one else []
+
+
 def union(bodies):
     bodies = [b for b in bodies if b]
     if not bodies:
@@ -221,6 +232,7 @@ class Builder:
         self.fr, self.s = fr, s
         self.r = s['bit_d'] / 2.0
         self.notes = []
+        self.bones = []                      # (axis, a, b, centre, radius) of every dogbone, for the edit highlight
 
     def walls(self, rng, inside_fn):
         """For each axis/side: True if material continues beyond that face of the box (a real wall)."""
@@ -268,6 +280,7 @@ class Builder:
                         else:
                             c[a] = rng[a][j[a]] + inward * self.r
                     out.append(self.fr.cyl(bit_axis, rng[bit_axis][0], rng[bit_axis][1], c, self.r))
+                    self.bones.append((bit_axis, rng[bit_axis][0], rng[bit_axis][1], c, self.r))
         return out
 
     def rounded(self, rng, walls, axis, radius):
@@ -296,6 +309,11 @@ class Builder:
         return b
 
 
+def _ratio(s):
+    r = s.get('ratio', 2.0)
+    return r if r and r > 0 else 2.0
+
+
 def _spec(s):
     d = dict(DEFAULTS)
     d.update(s or {})
@@ -313,7 +331,7 @@ def analyse(body_a, body_b, spec=None, fixed_roles=False):
             raise JointError('%s and %s overlap but are not at 90 degrees (or not flat boards).' % (body_a.name, body_b.name))
         fr = Frame(ov.vertices.item(0).geometry, u, na)
         region = fr.extents(ov)
-        auto_w = 2 * max(region[1][1] - region[1][0], region[2][1] - region[2][0])
+        auto_w = _ratio(s) * max(region[1][1] - region[1][0], region[2][1] - region[2][0])
         return {'mode': 'corner', 'A': body_a, 'B': body_b, 'fr': fr, 'region': region, 'auto_w': auto_w,
                 'inside_B': lambda p: inside(body_b, p)}
     f = contact_face(body_b, body_a)
@@ -341,7 +359,7 @@ def analyse(body_a, body_b, spec=None, fixed_roles=False):
             return True
         c = fr.co(p)
         return all(ext_r[k][0] < c[k] < ext_r[k][1] for k in range(3))
-    return {'mode': 'butt', 'A': body_a, 'B': body_b, 'fr': fr, 'region': region, 'auto_w': 2 * tb,
+    return {'mode': 'butt', 'A': body_a, 'B': body_b, 'fr': fr, 'region': region, 'auto_w': _ratio(s) * tb,
             'inside_B': inside_bx, 'depth': depth, 'through': depth >= through - 1e-6, 'a_thick': through}
 
 
@@ -435,11 +453,19 @@ def build_tools(body_a, body_b, spec=None, fixed_roles=False):
             region[kb] = [m - s['tenon_t'] / 2, m + s['tenon_t'] / 2]
 
     segs = layout(region[0][0], region[0][1], J['mode'], s)
+    if not mt and s['count'] < 1 and s['finger_w'] <= 0 and s['tab_len'] <= 0:
+        # short edge: the minimum (3 fingers / 1 tab) makes them much narrower than ratio x board -> say so
+        w = min(s1 - s0 for s0, s1, o in segs if J['mode'] == 'corner' or o == 'B')
+        t = J['auto_w'] / _ratio(s)
+        if w < 0.66 * J['auto_w']:
+            bld.notes.append('edge too short for %g x fingers: %.1f mm wide (%.1f x the board)' % (_ratio(s), w * 10, w / t))
     cut_a, cut_b, join_b = [], [], []
+    fingers = []                              # B's fingers / tabs as exact ranges (for the edit highlight)
     for (s0, s1, owner) in segs:
         rng = [(s0, s1), tuple(region[1]), tuple(region[2])]
         if J['mode'] == 'corner':
             if owner == 'B':                  # B keeps it -> cut from A
+                fingers.append(rng)
                 w = bld.walls(rng, inside_a)
                 g = bld.grow(rng, w, gap / 2)
                 cut_a.append(fr.box(g))
@@ -460,6 +486,7 @@ def build_tools(body_a, body_b, spec=None, fixed_roles=False):
                 if mt and w[2][1]:            # blind mortise: room for glue below the tenon
                     g[2] = (g[2][0], rng[2][1] + max(s['end_gap'], gap))
                 tab = [rng[0], rng[1], (rng[2][0] - EPS, rng[2][1])]
+                fingers.append(tab)
                 if relief == RELIEF_ROUND:
                     cut_a.append(bld.rounded(g, w, ax_m, bld.r))
                     join_b.append(bld.rounded(tab, w, ax_m, max(bld.r - gap, 0.005)))
@@ -484,6 +511,7 @@ def build_tools(body_a, body_b, spec=None, fixed_roles=False):
             round(max(x[1] - x[0] for x in tabs) * 10, 2),
             'length_mm': round((region[0][1] - region[0][0]) * 10, 2),
             'depth_mm': round((region[2][1] - region[2][0]) * 10, 2),
+            'fingers': (fr, fingers, bld.bones),
             'bit_axis': (ax_a, ax_b), 'notes': sorted(set(bld.notes)), 'style': STYLE_MT if mt else STYLE_AUTO,
             'thick_mm': (round((J['region'][2][1] - J['region'][2][0] if J['mode'] == 'corner' else J['a_thick']) * 10, 2),
                          round((J['region'][1][1] - J['region'][1][0]) * 10, 2))}
@@ -498,8 +526,9 @@ DEFAULTS = {
     'gap': 0.01,        # clearance per side of each finger/tab (cm) = 0.1 mm
     'bit_d': 0.635,     # 1/4" bit
     'relief': RELIEF_DOGBONE,
-    'count': 0,         # 0 = auto (finger width ~ 2 x board thickness, odd count for corners)
+    'count': 0,         # 0 = auto (finger width ~ ratio x board thickness, odd count for corners)
     'finger_w': 0.0,    # target finger width, 0 = auto
+    'ratio': 2.0,       # auto finger / tab width = ratio x board thickness
     'flip': 0,          # corner: swap which board owns the end fingers; butt: tabs at the ends
     'depth': 0.0,       # butt joints: 0 = through
     'tenon_t': 0.0,     # butt joints: 0 = full board thickness, else centred tenon

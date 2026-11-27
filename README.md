@@ -4,7 +4,7 @@ Two free add-ins for Autodesk Fusion, made for a hobby CNC router.
 
 | Add-in | What it does | Where in Fusion |
 |---|---|---|
-| **NMJoinery** | Finger joints, tab & slot and mortise & tenon between boards, as editable timeline features with dogbones / T-bones for your bit. Also **NM Drawer** (a whole drawer or bank of drawers in one dialog), **NM Cabinet** (a whole frameless cabinet with drawers, doors and shelves) and **NM Lay Flat** (flat copies of the boards for CAM). | Solid > Modify > NM Joint; Solid > Create |
+| **NMJoinery** | Finger joints, tab & slot and mortise & tenon between boards, as editable timeline features with dogbones / T-bones for your bit. Also **NM Drawer** (a whole drawer or bank of drawers in one dialog, with a drawer face inset or overlay), **NM Cabinet** (a whole frameless cabinet with drawers, doors and shelves) and **NM Lay Flat** (flat copies of the boards for CAM). | Solid > Modify > NM Joint; Solid > Create |
 | **RotaryUnwrap** | Flatten for Rotary: unrolls a round part into a flat strip for normal 3-axis toolpaths, plus `wrap_y_to_a.py` that turns the posted program into rotary (A-axis) moves. Made for an Avid CNC rotary with Mach4. | Solid > Modify > Flatten for Rotary |
 
 ## Install (Mac or Windows)

@@ -136,6 +136,8 @@ def size_changes(rec, old, new):
         same_t = lambda o: abs(mm(o['bt']) - mm(o['t'])) < TOL
         if same_t(old) != same_t(new):
             return None
+        if new.get('pull') == 3 and (mm(old.get('ue', '0 mm')) > TOL) != (mm(new.get('ue', '0 mm')) > TOL):
+            return None                         # notch pull: the top edge rounds come or go (sketches added / left out)
         skip = ({'w', 'd', 'h'} if new['size'] == 1 else set()) | ({'bt'} if same_t(new) else set())
     else:
         skip = {'sections'}
@@ -248,7 +250,7 @@ def rebuild(rec, new):
 def apply(cf, new):
     """Applies the edited dialog values. Returns 'sizes' or 'rebuilt'."""
     rec = record(cf)
-    old = current(rec)
+    old = mod(rec['kind']).upgrade(current(rec))  # same footing as the dialog (older items: slide ids, front, ...)
     ch = size_changes(rec, old, new)
     if ch is not None:
         if ch:

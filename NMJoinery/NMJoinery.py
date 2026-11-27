@@ -467,12 +467,14 @@ def size_mode(spec):
     return 1 if spec.get('count', 0) >= 1 else 2 if spec.get('finger_w', 0) > 0 else 0
 
 
-def make_group(comp, boards, pidx, exprs, fixed=False, pre=None, over=None, made=None):
+def make_group(comp, boards, pidx, exprs, fixed=False, pre=None, over=None, made=None, start=None):
     """One NM Joint custom feature for one or more joints between these boards (native bodies of comp):
     a base feature with one tool body per board operation + one combine per operation.
     over = {joint index: {key: expression}}: joints of a box with their own count / sizes.
     made = the settings it was first made with (kept through edits; a drawer / cabinet rebuild compares
-    against them to find what you changed per joint)."""
+    against them to find what you changed per joint).
+    start = {joint index: {key: expression}}: per joint settings the drawer / cabinet build itself gave (blind tabs
+    into a face), so a rebuild does not take them for your own changes."""
     over = clean_over(over, exprs)
     infos, roles, ops = group_tools(boards, pidx, joint_specs(exprs, over, len(pidx)), fixed, pre)
     feats = comp.features
@@ -536,6 +538,8 @@ def make_group(comp, boards, pidx, exprs, fixed=False, pre=None, over=None, made
     nv.addOrSetValue('ops', ops_key(ops))
     nv.addOrSetValue('over', json.dumps({str(j): sorted(d) for j, d in over.items()}))
     nv.addOrSetValue('made', json.dumps(made if made is not None else exprs))
+    if start:
+        nv.addOrSetValue('start', json.dumps({str(j): d for j, d in start.items()}))
     nv.addOrSetValue('mode', infos[0]['mode'] if len(infos) == 1 else 'box')
     nv.addOrSetValue('tokA', boards[roles[0][0]].entityToken)       # first joint, for board()
     nv.addOrSetValue('tokB', boards[roles[0][1]].entityToken)
@@ -554,6 +558,12 @@ def is_group(cf):
 def over_keys(cf):
     nv = cf.customNamedValues
     return {int(j): ks for j, ks in json.loads(nv.value('over')).items()} if nv.isExistingValue('over') else {}
+
+
+def group_start(cf):
+    """{joint index: {key: expression}}: what the drawer / cabinet build gave these joints to start with."""
+    nv = cf.customNamedValues
+    return {int(j): d for j, d in json.loads(nv.value('start')).items()} if nv.isExistingValue('start') else {}
 
 
 def group_over(cf):
@@ -640,9 +650,10 @@ def whole_box(bodies):
     return list(found.values())
 
 
-def create_all(bodies, exprs):
+def create_all(bodies, exprs, by_pair=None):
     """Every touching / overlapping pair gets a joint; all joints between boards of one component go into one
-    feature (see group_tools for why)."""
+    feature (see group_tools for why). by_pair = {frozenset of two board names: {key: expression}}: per joint
+    settings to start with (e.g. blind tabs into a drawer face); a rebuild's own changes (carry) win."""
     ensure_globals(design())
     lines, made = [], 0
     groups = {}                                 # (component, occurrence path) -> (comp, boards, pairs)
@@ -676,20 +687,32 @@ def create_all(bodies, exprs):
         boards2 = [boards[i] for i in used]
         pidx2 = [(used.index(ia), used.index(ib)) for ia, ib in good]
         pre = {(used.index(ia), used.index(ib)): built[(ia, ib)] for ia, ib in good}
-        over, keys = {}, {}
+        over, keys, base = {}, {}, {}
         for j, (ia, ib) in enumerate(pidx2):    # a drawer / cabinet rebuild: put back what you changed per joint
             key = (comp.name, frozenset((boards2[ia].name, boards2[ib].name)))
-            if key in carry:
-                over[j], keys[j] = dict(carry[key]), key
+            start = (by_pair or {}).get(key[1])
+            if start:
+                over[j], base[j] = dict(start), dict(start)
                 pre.pop((ia, ib), None)
+            if key in carry:
+                um, mine = design().unitsManager, {}
+                for k, v in carry[key].items():  # a setting that names a parameter that is gone: not put back
+                    try:
+                        um.evaluateExpression(v, 'mm')
+                        mine[k] = v
+                    except Exception:
+                        carry_failed.append('%s: %s (%s = %s no longer exists)' % (key[0], ' / '.join(sorted(key[1])), k, v))
+                if mine:
+                    over[j], keys[j] = dict(start or {}, **mine), key
+                    pre.pop((ia, ib), None)
         try:
             try:
-                cf, infos = make_group(comp, boards2, pidx2, exprs, pre=pre, over=over)
+                cf, infos = make_group(comp, boards2, pidx2, exprs, pre=pre, over=over, start=base)
             except jc.JointError as e:
-                if not over:
+                if not keys:
                     raise
                 carry_failed.extend('%s: %s (%s)' % (k[0], ' / '.join(sorted(k[1])), e) for k in keys.values())
-                cf, infos = make_group(comp, boards2, pidx2, exprs)
+                cf, infos = make_group(comp, boards2, pidx2, exprs, over=base, start=base)
                 keys = {}
             carry_used.update(keys.values())
             lines += [describe(info) for info in infos]
@@ -719,12 +742,13 @@ def joint_memo(comp, out):
         boards = group_boards(cf)
         shared = exprs_from_feature(cf)
         made = json.loads(nv.value('made')) if nv.isExistingValue('made') else shared
-        over = group_over(cf)
+        over, start = group_over(cf), group_start(cf)
         for j, (ia, ib) in enumerate(json.loads(nv.value('pairs'))):
             if not (boards[ia] and boards[ib]):
                 continue
             e = dict(shared, **over.get(j, {}))
-            d = {k: e[k] for k in JOINT_KEYS if not same_expr(e[k], made.get(k, DEFAULT_EXPR[k]), k)}
+            m = dict(made, **start.get(j, {}))     # the build's own start settings are not your changes
+            d = {k: e[k] for k in JOINT_KEYS if not same_expr(e[k], m.get(k, DEFAULT_EXPR[k]), k)}
             if d:
                 out[(comp.name, frozenset((boards[ia].name, boards[ib].name)))] = d
 
@@ -1583,8 +1607,9 @@ def edit_group(cf, exprs, over=None):
         comp = cf.parentComponent
         nv = cf.customNamedValues
         made = json.loads(nv.value('made')) if nv.isExistingValue('made') else None
+        start = group_start(cf)
         cf.deleteMe()
-        make_group(comp, boards, pidx, exprs, fixed=True, over=over, made=made)
+        make_group(comp, boards, pidx, exprs, fixed=True, over=over, made=made, start=start)
 
 
 class EditExecute(adsk.core.CommandEventHandler):
@@ -1845,7 +1870,7 @@ def run(context):
         if panel and not panel.controls.itemById(CREATE_ID):
             ctl = panel.controls.addCommand(c)
             ctl.isPromoted = True
-        for mname in ('nm_flat', 'nm_drawer', 'nm_cabinet', 'nm_edit', 'nm_cutlist'):  # own modules; a failure there must not stop NM Joint
+        for mname in ('nm_flat', 'nm_drawer', 'nm_cabinet', 'nm_edit', 'nm_cutlist', 'nm_trace'):  # own modules; a failure there must not stop NM Joint
             try:
                 mod = importlib.reload(importlib.import_module(mname))
                 mod.register(sys.modules[__name__])
@@ -1880,7 +1905,7 @@ def stop(context):
         nmj_update.stop_('NMJoinery')
     except Exception:
         log(traceback.format_exc())
-    for mname in ('nm_cutlist', 'nm_edit', 'nm_cabinet', 'nm_drawer', 'nm_flat'):
+    for mname in ('nm_trace', 'nm_cutlist', 'nm_edit', 'nm_cabinet', 'nm_drawer', 'nm_flat'):
         try:
             importlib.import_module(mname).unregister(sys.modules[__name__])
         except Exception:

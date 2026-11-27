@@ -2,8 +2,9 @@
 # Built on NM Drawer: the same Maker (fully dimensioned sketches), the same finger / tab joints (NM Box feature), and
 # drawer sections are NM Drawer banks whose opening sizes point at the cabinet's own parameters, so Change Parameters
 # on the cabinet resizes the drawers too.
-# Coordinates: x = width (left to right), y = depth (front y=0 to back), z = height (floor z=0). Fronts (false fronts,
-# doors) sit in front of y=0 (frameless, full overlay). Lengths in cm inside Fusion, parameter values in mm.
+# Coordinates: x = width (left to right), y = depth (front y=0 to back), z = height (floor z=0). Fronts (drawer
+# faces, false fronts, doors): inset = inside the openings from y=0 back; overlay = in front of y=0 (frameless).
+# Lengths in cm inside Fusion, parameter values in mm.
 import adsk.core, adsk.fusion, os, re, sys, json, traceback
 
 CMD_ID = 'nmjCabinet'
@@ -17,23 +18,27 @@ BASES = ['Toe kick notched in the sides', 'Separate plinth', 'None (flat bottom:
 TOPS = ['Full top panel', 'Two stretchers (under a counter top)']
 BACKS = ['Thin panel in a groove (set in)', 'Solid, flush with the back edges']
 KINDS = ['Drawers', 'Doors', 'Open shelves']
+FPOS = ['Inset (inside the openings)', 'Partial overlay (lap the opening edges)', 'Full overlay (cover the carcass edges)']
+DFRONTS = ['Box front is the face', 'Separate false front (screwed on)']
 MAX_SECTIONS = 4
 
 # Stock: 3/4" Baltic birch = 18 mm actual (carcass, fronts), back 1/4" BB = 6 mm in a groove.
-SECTION = {'kind': 0, 'sh': '200 mm', 'nd': 3, 'heights': 1, 'step': '25 mm', 'slide': 0, 'dpreset': '',
+SECTION = {'kind': 0, 'sh': '200 mm', 'nd': 3, 'heights': 1, 'step': '25 mm', 'slide': 0, 'slide_id': 'lv61080', 'dpreset': '',
            'nsh': 1, 'adj': True, 'ndoor': 0}
 DEFAULTS = {
     'name': 'Cabinet', 'w': '600 mm', 'h': '870 mm', 'd': '560 mm', 't': '18 mm',
     'bk': '6 mm', 'bgd': '6 mm', 'bin': '10 mm', 'base': 0, 'kh': '100 mm', 'kd': '75 mm', 'top': 0, 'sw': '100 mm',
-    'rev': '3 mm', 'ft': '18 mm', 'joints': 0, 'relief': 1, 'fr': 2.0, 'flat': True, 'ns': 1, 'units': 0, 'bstyle': 0,
-    'rails': False, 'nh': '90 mm',
+    'rev': '3.175 mm', 'ft': '18 mm', 'joints': 0, 'relief': 1, 'fr': 2.0, 'flat': True, 'ns': 1, 'units': 0, 'bstyle': 0,
+    'rails': False, 'nh': '90 mm', 'fpos': 0, 'dfront': 0, 'em': '3.175 mm', 'eov': '6.35 mm',
+    'engrave': False,             # 0.10.0: part names on the drawer boards (the carcass comes later)
     'sections': [dict(SECTION) for _ in range(MAX_SECTIONS)],
 }
 COMMENTS = {
     'w': 'outside width', 'h': 'outside height (floor to top, base included)', 'd': 'outside depth (sides)',
     't': 'carcass board thickness', 'bk': 'back panel thickness', 'bgd': 'back groove depth',
     'bin': 'back panel set in from the back edge', 'nh': 'hanging rail height (rails behind the back panel)', 'gg': 'groove clearance per side', 'ge': 'room at panel edges',
-    'rev': 'gap between fronts (doors / drawer fronts)', 'ft': 'front thickness (doors / drawer fronts)',
+    'rev': 'gap between fronts (doors / drawer fronts)', 'ft': 'door / false front thickness',
+    'em': 'inset fronts: gap to the opening, all round', 'eov': 'partial overlay: fronts lap the opening edges by this',
     'kh': 'toe kick / plinth height', 'kd': 'toe kick / plinth set back from the front', 'sw': 'stretcher width',
     'z0': 'inside bottom (top of the bottom panel)', 'z1': 'inside top (underside of the top)',
     'id': 'inside depth (front edge to the back panel)',
@@ -53,6 +58,11 @@ def drw():
 
 def sections(o):
     return [dict(SECTION, **s) for s in o['sections'][:int(o['ns'])]]
+
+
+def pos(o):
+    """Where the fronts sit: 0 inset, 1 partial overlay, 2 full overlay (separate false fronts: always full)."""
+    return 2 if int(o.get('dfront', 0)) == 1 else int(o.get('fpos', 0))
 
 
 def geom(o):
@@ -84,7 +94,7 @@ def slide_length(sp, depth, fallback):
     if sp.get('none'):
         return depth - 2          # no slides: the box runs to 2 mm short of the back
     if 'lengths' in sp:
-        fits = [L for L in sp['lengths'] if L <= depth + 1e-6]
+        fits = [L for L in sp['lengths'] if L <= depth + 0.05]
         return fits[-1] if fits else sp['lengths'][0]
     return min(fallback, depth)
 
@@ -109,18 +119,31 @@ def drawer_opts(o, k, P=None, g=None):
         ow, oh, od = ['%g mm' % x for x in (g['iw'], g['s'][k], g['id'])]
     num = lambda x: '%g mm' % x
     t, rev = (e('{t}'), e('{rev}')) if P else (o['t'], o['rev'])
-    sl = slide_length(sp, g['id'], um.evaluateExpression(d['sl'], 'mm') * 10)
+    p, face = pos(o), not int(o.get('dfront', 0))
+    tf = um.evaluateExpression(o['ft'], 'mm') * 10      # drawer faces = the doors' thickness (3/4" face, 1/2" box)
+    back = tf if face and p == 0 else 0                 # inset face: the slides start one face thickness back
+    sl = slide_length(sp, g['id'] - back, um.evaluateExpression(d['sl'], 'mm') * 10)
     names = [i for i, s in enumerate(secs) if s['kind'] == 0]
     name = o['name'] + (' drawer' if len(names) == 1 else ' S%d drawer' % (k + 1))
-    d.update(size=1, nd=int(sct['nd']), heights=int(sct['heights']), step=sct['step'], slide=int(sct['slide']),
-             name=name, ow=ow, oh=oh, od=od, sl=num(sl), top=False, flat=o['flat'], joints=int(o['joints']), fr=float(o.get('fr', 2.0)),
-             ff=True, ft=e('{ft}') if P else o['ft'], rev=rev,
+    d.update(size=1, nd=int(sct['nd']), heights=int(sct['heights']), step=sct['step'], slide=int(sct['slide']), slide_id=sp['id'],
+             name=name, ow=ow, oh=oh, od=od, sl=num(sl), top=False, flat=o['flat'], engrave=bool(o.get('engrave')), joints=int(o['joints']), fr=float(o.get('fr', 2.0)),
+             ff=not face, front=2 if face else 1, ft=e('{ft}') if P else o['ft'], rev=rev,
              fs='%s - %s / 2' % (t, rev),
              ftop='%s - %s / 2' % (t if k == 0 else '%s / 2' % t, rev),
              fb='%s - %s / 2' % (t if k == n - 1 else '%s / 2' % t, rev))
+    if face:                # the box front is the face: inset / partial / full overlay as the cabinet's fronts
+        d.update(epos=p, ect=t, efo='%s / 2' % rev, _yface=p != 0, et=e('{ft}') if P else o['ft'])
+        if p == 0:
+            d['em'] = e('{em}') if P else o['em']
+        elif p == 1:
+            d['eov'] = e('{eov}') if P else o['eov']
+        else:               # full overlay: like the doors, half the carcass edge between two sections
+            d.update(_eps=d['fs'], _ept=d['ftop'], _epb=d['fb'])
     if sp['gap']:
         d['sg'], d['ob'] = sp['gap'], sp['below']
         d['ot'] = '3 mm' if sp.get('none') else dr.DEFAULTS['ot']
+        if face and dr.face_gaps(d):                # the face hides the gaps: 1" above the box, 1/4" below
+            d.update(dr.face_gaps(d))
         if sp.get('none') and int(sct['nd']) > 1:     # stacked, nothing under them yet: same gap below as above
             d['ob'] = '3 mm'                         # (wooden runners will set this to the runner height)
     if 'line' in sp:
@@ -128,7 +151,7 @@ def drawer_opts(o, k, P=None, g=None):
     if P:
         d['_x0'], d['_z0'] = e('{t}'), e('{b%d}' % (k + 1))
         if sp.get('none'):                      # no slide length to pick: the depth follows the cabinet
-            d['sl'] = e('{id} - 2 mm')
+            d['sl'] = e('{id} - 2 mm') + (' - %g mm' % back if back else '')
     return d
 
 
@@ -159,6 +182,11 @@ def check(o):
         out.append('Stretchers: at least 30 mm wide and less than half the depth.')
     if v(o['rev']) < 0 or v(o['rev']) > t:
         out.append('Gap between fronts: 0 to the board thickness.')
+    if pos(o) == 0 and not (0 <= v(o['em']) <= 10):
+        out.append('Inset gap: 0 to 10 mm.')
+    if pos(o) == 1 and not (0 < v(o['eov']) and 2 * v(o['eov']) + v(o['rev']) <= t + 1e-6):
+        out.append('Overlap: more than 0, and twice it plus the gap between fronts at most the board thickness '
+                   '(the fronts of two sections share one fixed shelf edge).')
     secs = sections(o)
     for k, s in enumerate(g['s']):
         if s < 40:
@@ -173,6 +201,11 @@ def check(o):
         elif sct['kind'] == 2 and not (0 <= int(sct['nsh']) <= 10):
             out.append('Section %d: 0 to 10 shelves.' % (k + 1))
     return out
+
+
+def shelf_y(p, sct):
+    """Front edge of a shelf: behind an inset door, else at the front."""
+    return '{ft}' if p == 0 and sct['kind'] == 1 else '0'
 
 
 def shelf_z(k, j, n_sh):
@@ -193,7 +226,9 @@ def build(o):
     base, top = int(o['base']), int(o['top'])
     solid = int(o.get('bstyle', 0)) == 1          # solid back, flush at the back: no groove, no set-in
     rl = rails(o)
-    params = [(k, o[k]) for k in ('w', 'h', 'd', 't', 'bk') + (() if solid else ('bgd',)) + ('rev', 'ft')]
+    p = pos(o)
+    params = [(k, o[k]) for k in ('w', 'h', 'd', 't', 'bk') + (() if solid else ('bgd',)) + ('rev', 'ft') +
+              (('em',) if p == 0 else ('eov',) if p == 1 else ())]
     if not solid:                               # with hanging rails the back sits right in front of them
         params += [('bin', '{t}' if rl else o['bin'])] + ([('nh', o['nh'])] if rl else [])
     params += ([] if solid else [('gg', 'nmj_gap')]) + [('ge', '1 mm')]
@@ -258,7 +293,8 @@ def build(o):
                 z = '{b%d} + {pm} + {pp} * floor((%s - {b%d} - {pm}) / {pp} + 0.5) + {pdia} / 2' % (k, z, k)
                 loose.append((k, j, z))
             else:
-                jointed.append(m.box('Shelf %d.%d' % (k, j), '{t}', '0', '{w} - {t}', '{id} - {ge}', z, '%s + {t}' % z))
+                jointed.append(m.box('Shelf %d.%d' % (k, j), '{t}', shelf_y(p, sct), '{w} - {t}', '{id} - {ge}', z,
+                                     '%s + {t}' % z))
     if base == 0:
         jointed.append(m.box('Toe kick', '{t}', '{kd}', '{w} - {t}', '{kd} + {t}', '0', '{kh}'))
     exprs = dict(nm.DEFAULT_EXPR)
@@ -286,26 +322,39 @@ def build(o):
         m.box('Back', '{t} - {bgd} + {ge}', '{id}', '{w} - {t} + {bgd} - {ge}', '{id} + {bk}', '{z0} - {bgd} + {ge}',
               '{z1} + {bgd} - {ge}' if top == 0 else '{h}')
     for k, j, z in loose:
-        m.box('Shelf %d.%d' % (k, j), '{t} + {ge}', '{ge}', '{w} - {t} - {ge}', '{id} - {ge}', z, '%s + {t}' % z)
+        m.box('Shelf %d.%d' % (k, j), '{t} + {ge}', '%s + {ge}' % shelf_y(p, secs[k - 1]), '{w} - {t} - {ge}',
+              '{id} - {ge}', z, '%s + {t}' % z)
     for k, sct in enumerate(secs, 1):           # shelf pin holes where a section has loose shelves
         if sct['kind'] in (1, 2) and sct['adj'] and int(sct['nsh']):
             pin_holes(m, comp, k)
-    for k, sct in enumerate(secs, 1):           # overlay doors: cover the box edges like the drawer fronts
+    for k, sct in enumerate(secs, 1):           # doors: inset / partial / full overlay like the drawer faces
         if sct['kind'] != 1:
             continue
-        ov_top = '{t} - {rev} / 2' if k == 1 else '({t} - {rev}) / 2'
-        ov_bot = '{t} - {rev} / 2' if k == n else '({t} - {rev}) / 2'
-        z0, z1 = '{b%d} - (%s)' % (k, ov_bot), '{b%d} + {s%d} + %s' % (k, k, ov_top)
+        if p == 0:                              # inside the opening, flush with the front edges
+            x0, x1, y0, y1 = '{t} + {em}', '{w} - {t} - {em}', '0', '{ft}'
+            z0, z1 = '{b%d} + {em}' % k, '{b%d} + {s%d} - {em}' % (k, k)
+        elif p == 1:                            # laps the opening edges
+            x0, x1, y0, y1 = '{t} - {eov}', '{w} - {t} + {eov}', '-{ft}', '0'
+            z0, z1 = '{b%d} - {eov}' % k, '{b%d} + {s%d} + {eov}' % (k, k)
+        else:                                   # covers the carcass edges (half of a fixed shelf between sections)
+            ov_top = '{t} - {rev} / 2' if k == 1 else '({t} - {rev}) / 2'
+            ov_bot = '{t} - {rev} / 2' if k == n else '({t} - {rev}) / 2'
+            x0, x1, y0, y1 = '{rev} / 2', '{w} - {rev} / 2', '-{ft}', '0'
+            z0, z1 = '{b%d} - (%s)' % (k, ov_bot), '{b%d} + {s%d} + %s' % (k, k, ov_top)
         if door_count(sct, g) == 1:
-            m.box('Door %d' % k, '{rev} / 2', '-{ft}', '{w} - {rev} / 2', '0', z0, z1)
+            m.box('Door %d' % k, x0, y0, x1, y1, z0, z1)
         else:
-            m.box('Door %d left' % k, '{rev} / 2', '-{ft}', '{w} / 2 - {rev} / 2', '0', z0, z1)
-            m.box('Door %d right' % k, '{w} / 2 + {rev} / 2', '-{ft}', '{w} - {rev} / 2', '0', z0, z1)
+            m.box('Door %d left' % k, x0, y0, '{w} / 2 - {rev} / 2', y1, z0, z1)
+            m.box('Door %d right' % k, '{w} / 2 + {rev} / 2', y0, x1, y1, z0, z1)
     lines.insert(0, '%s: parameters %s* (Modify > Change Parameters)' % (o['name'], P))
     lines.insert(1, 'Outside %g x %g x %g mm, %g mm boards; inside %g wide x %g deep; %s; %s; %s back'
                  % (g['w'], g['h'], g['d'], g['t'], g['iw'], g['id'], BASES[base].split(' (')[0].lower(),
                     TOPS[top].split(' (')[0].lower(), 'solid flush' if solid else
                     'grooved (hanging rails behind it)' if rl else 'grooved'))
+    lines.insert(2, 'Fronts %s%s, %g mm between them' % (
+        ['inset, %g mm gap to the openings' % (um_mm(o['em'])), 'partial overlay, lapping the openings %g mm'
+         % um_mm(o['eov']), 'full overlay, %g mm short of the outside' % (um_mm(o['rev']) / 2)][p],
+        '' if int(o.get('dfront', 0)) else '; drawer faces = the box fronts', um_mm(o['rev'])))
     for k, sct in enumerate(secs):
         extra = ''
         if sct['kind'] == 1:
@@ -315,14 +364,6 @@ def build(o):
                                          'ves' if int(sct['nsh']) > 1 else 'f')
         lines.append('Section %d: %s, opening %g mm high, bottom %g mm up%s'
                      % (k + 1, KINDS[sct['kind']].lower(), round(g['s'][k], 2), round(g['b'][k], 2), extra))
-    if o['flat']:
-        try:
-            import nm_flat
-            nm_flat.make_flat([b.createForAssemblyContext(occ) for b in comp.bRepBodies], o['name'])
-            lines.append('Flat copy of the carcass for CAM made')
-        except Exception:
-            nm.log('cabinet lay flat failed:\n' + traceback.format_exc())
-            lines.append('Lay flat failed (see nmj_log.txt)')
     occs = [occ]
     col = exp('max(max({w}; {h}); {d}) + 200 mm')         # drawer flat copies: to the right of the carcass flat copy
     dx = [col]
@@ -331,12 +372,54 @@ def build(o):
             continue
         d = drawer_opts(o, k, P=P, g=g)
         d['_flat_dx0'] = ' + '.join(dx)
+        B = dr.unique_prefix(des, d['name'])          # the bank's parameter prefix (build_bank picks the same)
         bo, sub = dr.build_bank(d)
         occs += bo
         lines += ['Section %d: %s' % (k + 1, x) for x in sub[1:]]
         dx.append('%d * (%s)' % (int(sct['nd']), exp('max({w}; {d}) + 100 mm')))
+        if dr.has_slides(d) and d['marks']:
+            lines.append('Section %d: %s' % (k + 1, slide_marks(m, d, B)))
+    if o['flat']:                               # after the slide line grooves, so the flat copy has them
+        try:
+            import nm_flat
+            nm_flat.make_flat([b.createForAssemblyContext(occ) for b in comp.bRepBodies], o['name'])
+            lines.append('Flat copy of the carcass for CAM made')
+        except Exception:
+            nm.log('cabinet lay flat failed:\n' + traceback.format_exc())
+            lines.append('Lay flat failed (see nmj_log.txt)')
     nm.log('cabinet ' + ' | '.join(lines))
     return occs, lines
+
+
+def slide_marks(m, d, B):
+    """Slide line grooves on the inside of both cabinet sides for the bank of drawers d (parameter prefix B), the
+    partner of the drawers' own grooves: 0.5 mm deep, 1 mm high, on the centre line of each cabinet slide member
+    (its screw holes), from the slide's cabinet setback (+ the face thickness for inset faces) one slide length back.
+    All from the bank's parameters, so they follow the opening, shares, slide height and line."""
+    dr = drw()
+    up = m.comp.parentDesign.userParameters
+    for k, e, c in (('smw', '1 mm', 'cabinet slide line mark: groove height (centred on the slide centre line)'),
+                    ('smd', '0.5 mm', 'cabinet slide line mark: groove depth into the inside of the sides')):
+        if not up.itemByName(m.pre + k):
+            up.add(m.pre + k, adsk.core.ValueInput.createByString(e), 'mm', '%s: %s' % (m.pre.rstrip('_'), c))
+    sp = dr.SLIDES[int(d['slide'])]
+    y0 = '%g mm' % sp.get('cab_back', 2)
+    if dr.has_face(d) and int(d.get('epos', 0)) == 0:
+        y0 += ' + %set' % B                      # inset face: the slides start behind it
+    n = int(d['nd'])
+    parts = [m.body('Left'), m.body('Right')]
+    for i in range(1, n + 1):                    # 1 = top drawer
+        zc = ' + '.join([d['_z0'], B + 'ob'] + ['%ss%d' % (B, j) for j in range(i + 1, n + 1)] +
+                        ['%sd%d_sline - %ssh / 2' % (B, i, B)])
+        m.box('Cabinet slide line %d' % i if n > 1 else 'Cabinet slide line', '{t} - {smd}', y0,
+              '{w} - {t} + {smd}', '%s + %ssl' % (y0, B), '%s - {smw} / 2' % zc, '%s + {smw} / 2' % zc, CUT, parts)
+    back = round(m.um.evaluateExpression(y0, 'mm') * 10, 2)
+    return ('slide line grooves inside both cabinet sides (0.5 mm deep, 1 mm high) on the centre line of each cabinet '
+            'slide, starting %g mm from the front%s' % (back, ' (behind the inset face)' if '+' in y0 else ''))
+
+
+def um_mm(e):
+    return round(nm.design().unitsManager.evaluateExpression(e, 'mm') * 10, 3)
 
 
 def door_count(sct, g):
@@ -391,10 +474,22 @@ TIPS = {
     'nh': 'Height of each hanging rail.',
     'bk': 'Back panel thickness (1/4" ply is 6 mm; a solid back is usually the board thickness).', 'bgd': 'How deep the back groove goes into the sides, top '
     'and bottom.', 'bin': 'Back groove set in from the back edge (room to scribe to the wall).',
-    'ft': 'Thickness of the doors and drawer fronts.', 'rev': 'Gap between neighbouring doors / drawer fronts. '
-    'Fronts cover the carcass edges except half of it at the outside.',
+    'fpos': 'Where the drawer faces and doors sit. Inset: inside the openings, a gap all round (the drawer slides '
+            'go one face thickness back). Partial overlay: they lap over the opening edges. Full overlay: they cover '
+            'the carcass edges, half the gap short of the outside.',
+    'dfront': 'Drawer front: the box front itself is the face (Front thick, on boxes of the drawer boards), or a separate false '
+              'front of the front thickness screwed on (always full overlay).',
+    'em': 'Inset: gap between each front and its opening, all round (1/8").',
+    'eov': 'Partial overlay: how far the fronts lap over the opening edges. Between two sections the fixed shelf '
+           'is shared, so twice this plus the gap must fit in the board thickness.',
+    'ft': 'Thickness of the doors, the drawer faces and separate false fronts. Drawer faces can be thicker than the '
+          'drawer boxes (3/4" faces on 1/2" boxes); with Inset fronts the slides start one face thickness back.',
+    'rev': 'Gap between neighbouring doors / drawer faces (1/8").',
     'ns': 'How many sections, stacked top to bottom. A fixed shelf (tabbed into the sides) separates them.',
     'flat': 'Also make flat copies of every board (carcass and drawers), laid side by side for CAM.',
+    'engrave': 'Puts each drawer board\'s name (e.g. KITCHEN S1 DRAWER L SIDE) on its inside face in 1/4 in '
+               'single-stroke capitals for one V-bit pass in CAM (Trace / Engrave, e.g. 60 deg 0.5 mm deep). '
+               'The carcass boards do not get names yet.',
 }
 SEC_TIPS = {
     'k': 'What goes in this section.',
@@ -409,23 +504,31 @@ SEC_TIPS = {
     'dn': 'One or two doors.',
 }
 DEFAULT_PRESET = '(NM Drawer defaults)'
-VALUE_KEYS = ('w', 'h', 'd', 't', 'kh', 'kd', 'sw', 'bk', 'bgd', 'bin', 'nh', 'ft', 'rev')
+VALUE_KEYS = ('w', 'h', 'd', 't', 'kh', 'kd', 'sw', 'bk', 'bgd', 'bin', 'nh', 'ft', 'rev', 'em', 'eov')
 note = ''
 
 
 def upgrade(raw):
     o = dict(DEFAULTS)
     o.update({k: v for k, v in raw.items() if k in DEFAULTS and k != 'sections'})
+    if raw and 'fpos' not in raw:                  # saved before 0.9.0: full overlay false fronts, as then
+        o['fpos'], o['dfront'] = 2, 1
     secs = raw.get('sections') or []
     o['sections'] = [dict(SECTION, **{k: v for k, v in (secs[i] if i < len(secs) else {}).items() if k in SECTION})
                      for i in range(MAX_SECTIONS)]
+    for i, s in enumerate(o['sections']):                 # slides by id (older saves: the old list position)
+        s['slide'] = drw().slide_index(secs[i] if i < len(secs) else {})
+        s['slide_id'] = drw().SLIDES[s['slide']]['id']
     return o
 
 
 def load_last():
     try:
         with open(LAST) as f:
-            return upgrade(json.load(f))
+            raw = json.load(f)
+        raw.setdefault('fpos', 0)               # the dialog's last values: new cabinets start inset (0.9.0)
+        raw.setdefault('dfront', 0)
+        return upgrade(raw)
     except Exception:
         return upgrade({})
 
@@ -479,6 +582,10 @@ def add_inputs(inputs, o):
     val(c, 'bin', 'Set in')
     _tip(c.addBoolValueInput('rails', 'Hanging rails', True, '', bool(o.get('rails'))))
     val(c, 'nh', 'Rail height')
+    _dropdown(c, 'dfront', 'Drawer fronts', DFRONTS, int(o.get('dfront', 0)))
+    _dropdown(c, 'fpos', 'Fronts', FPOS, int(o.get('fpos', 0)))
+    val(c, 'em', 'Inset gap')
+    val(c, 'eov', 'Overlap')
     val(c, 'ft', 'Front thick')
     val(c, 'rev', 'Gap between')
     _tip(inputs.addIntegerSpinnerCommandInput('ns', 'Sections', 1, MAX_SECTIONS, 1, int(o['ns'])))
@@ -500,6 +607,7 @@ def add_inputs(inputs, o):
         _dropdown(c, 'dn%d' % i, 'Doors', DOORS, int(s['ndoor']), tip('dn'))
         _tip(c.addIntegerSpinnerCommandInput('nsh%d' % i, 'Shelves', 0, 10, 1, int(s['nsh'])), tip('nsh'))
         _tip(c.addBoolValueInput('adj%d' % i, 'Adjustable', True, '', bool(s['adj'])), tip('adj'))
+    _tip(inputs.addBoolValueInput('engrave', 'Engrave part names', True, '', bool(o.get('engrave'))))
     _tip(inputs.addBoolValueInput('flat', 'Lay flat', True, '', o['flat']))
     inputs.addTextBoxCommandInput('msg', '', '', 4, True)
     drw().to_units(inputs, unit_ids(), memo)
@@ -509,11 +617,11 @@ def add_inputs(inputs, o):
 def read(inputs):
     it = inputs.itemById
     o = {'name': it('name').value.strip() or 'Cabinet'}
-    for k in ('joints', 'relief', 'base', 'top', 'bstyle'):
+    for k in ('joints', 'relief', 'base', 'top', 'bstyle', 'fpos', 'dfront'):
         o[k] = it(k).selectedItem.index
     for k in VALUE_KEYS:
         o[k] = drw().dexpr(inputs, k)
-    o['ns'], o['flat'] = it('ns').value, it('flat').value
+    o['ns'], o['flat'], o['engrave'] = it('ns').value, it('flat').value, it('engrave').value
     o['fr'] = round(it('fr').value, 2)
     o['units'] = 1 if drw().inch(inputs) else 0
     o['rails'] = it('rails').value
@@ -523,6 +631,7 @@ def read(inputs):
         o['sections'].append({'kind': it('k%d' % i).selectedItem.index, 'sh': drw().dexpr(inputs, 'sh%d' % i),
                               'nd': it('nd%d' % i).value, 'heights': it('ht%d' % i).selectedItem.index,
                               'step': drw().dexpr(inputs, 'st%d' % i), 'slide': it('sl%d' % i).selectedItem.index,
+                              'slide_id': drw().SLIDES[it('sl%d' % i).selectedItem.index]['id'],
                               'dpreset': '' if dp == DEFAULT_PRESET else dp, 'ndoor': it('dn%d' % i).selectedItem.index,
                               'nsh': it('nsh%d' % i).value, 'adj': it('adj%d' % i).value})
     return o
@@ -538,6 +647,10 @@ def show(inputs):
     it('bin').isVisible = groove and not it('rails').value       # rails: the back sits right in front of them
     it('nh').isVisible = groove and it('rails').value
     it('relief').isVisible = it('fr').isVisible = it('joints').selectedItem.index == 0
+    false_fronts = it('dfront').selectedItem.index == 1
+    fp = 2 if false_fronts else it('fpos').selectedItem.index
+    it('fpos').isEnabled = not false_fronts            # separate false fronts: full overlay only
+    it('em').isVisible, it('eov').isVisible = fp == 0, fp == 1
     for i in range(1, MAX_SECTIONS + 1):
         it('g_s%d' % i).isVisible = i <= ns
         kind = it('k%d' % i).selectedItem.index

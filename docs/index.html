@@ -79,7 +79,7 @@ footer{margin-top:40px;border-top:1px solid var(--border);padding-top:10px;font-
 <div class="page">
 <header>
 <h1>NM<em>Joinery</em> for Fusion</h1>
-<div class="sub">Install · joints · drawers · cabinets · edit · lay flat &amp; nesting · cut list — version 0.8.1</div>
+<div class="sub">Install · joints · drawers · cabinets · drawer faces · edit · lay flat &amp; nesting · cut list — version 0.9.0</div>
 </header>
 
 <input type="radio" name="tabs" class="tab-radio" id="tab-install" checked><input type="radio" name="tabs" class="tab-radio" id="tab-joint"><input type="radio" name="tabs" class="tab-radio" id="tab-drawer"><input type="radio" name="tabs" class="tab-radio" id="tab-cabinet"><input type="radio" name="tabs" class="tab-radio" id="tab-edit"><input type="radio" name="tabs" class="tab-radio" id="tab-flat"><input type="radio" name="tabs" class="tab-radio" id="tab-cut"><input type="radio" name="tabs" class="tab-radio" id="tab-more">
@@ -213,12 +213,52 @@ as one editable item in the timeline.</p>
 
 <h3>Also in the dialog</h3>
 <div class="cards">
-<div class="card"><h4>Slides</h4>Lee Valley 61080 soft-close side-mount built in (12.7–13.5 mm per side, 450–600 mm), or <i>Other</i>: type the gap. The longest slide that fits is picked. A shallow groove marks the slide line on both sides.</div>
+<div class="card"><h4>Slides</h4>Six Lee Valley side-mounts built in: 61080 soft-close, 100 lb, 100 lb hold-out, 100 lb touch-open, 75 lb (light drawers), all 12.7–13.5 mm per side, and 200 lb (heavy drawers, 19.05–19.45 mm per side). Or <i>Other</i>: type the gap, or <i>No slides</i>. The longest slide that fits is picked. A shallow groove marks the slide line on both sides; in NM Cabinet the inside of the cabinet sides gets the matching groove.</div>
 <div class="card"><h4>Bank of drawers</h4>In opening mode, <i>Drawers</i> more than 1: several drawers stacked in one opening, all the same height or graduated. One set of <code>bank_*</code> parameters drives them all.</div>
-<div class="card"><h4>Front &amp; pull</h4>False front with 2 or 4 screw holes; finger pull (scoop) or hand hole (slot) in the front.</div>
+<div class="card"><h4>Front &amp; pull</h4><b>Plain</b> box front, a <b>false front</b> (separate board with 2 or 4 screw holes), or <b>the box front is the drawer face</b> (below). Pull: finger pull (scoop), hand hole (slot), or a <b>notch</b> down from the top edge with round corners (default 127 &times; 44.45 mm = 5 &times; 1&frac34; in, 1/2 in bottom corners, 1/4 in rounds at the top edge; the kitchen-island handle). In a bank each notch reads as a slot under the face above.</div>
 <div class="card"><h4>Lay flat</h4>Tick it for a flat copy of every board, ready for CAM. See the <i>Lay Flat</i> tab.</div>
+<div class="card"><h4>Engrave part names</h4>Puts each board's name on its <b>inside</b> face in a single-line font, e.g. <i>KITCHEN DRAWER 2 L SIDE</i> (shortened to <i>KD2 L</i> on small boards). Letters 6.35 mm (1/4 in) high, kept 3 mm clear of joints, grooves, dados and pulls. The letters are <b>wire bodies</b> (lines, no solid), so nothing is cut in the model: in CAM pick them with <b>Trace</b> (or Engrave), T51 60&deg; V-bit, 0.5 mm deep (a line about 0.6 mm wide). They follow size changes and come along on the Lay Flat copies, on top of their board. NM Cabinet: drawers only for now.</div>
+<div class="card"><h4>NM Name Trace (Manufacture &rarr; 2D)</h4>Makes the CAM for all the names in one go. Make a milling setup on the Lay Flat boards, then click <b>NM Name Trace</b> in the Manufacture workspace (2D panel). Pick the <b>setup</b>, the <b>V-bit</b> and the <b>depth</b> (0.5 mm by default): it adds one Trace called <i>Part names</i> with every letter stroke in it and generates the toolpath. Only names that lie flat and face up in that setup are used; the dialog says how many and how many were left out (standing up in the assembled box, or on the underside of a board: that board needs its own setup). The V-bit list has the 60&deg; V-bits from the document and your tool libraries; if you have none, a built-in 1/2&quot; 60&deg; V-bit is there (check its feeds for your machine). Changed the design? Run it again: the same <i>Part names</i> Trace is updated, not a second one added.</div>
 </div>
 <div class="note info"><b>The result message</b> at the bottom of the dialog tells you where the slides go: the drawer line up from the bottom of the box sides, and the cabinet line up from the opening bottom.</div>
+
+<h3>Drawer face: the box front is the face</h3>
+<p>Front = <b>Box front is the drawer face</b>: no separate false front. The front board is made bigger than the box and becomes the face you see, joined to the sides with tabs. In opening mode (<i>Cabinet opening + slides</i>) it fits the opening in one of three ways:</p>
+<svg viewBox="0 0 960 215" width="100%" role="img" aria-label="Top view of the three face positions: inset inside the opening, partial overlay lapping the opening edge, full overlay covering the cabinet edge" style="max-width:960px;display:block;margin:6px 0 4px">
+<g font-family="IBM Plex Mono, monospace" font-size="11" fill="#c8d4e8" text-anchor="middle"><text x="150" y="18">INSET</text><text x="480" y="18">PARTIAL OVERLAY</text><text x="810" y="18">FULL OVERLAY</text></g>
+<g font-family="IBM Plex Mono, monospace" font-size="9" fill="#5a6678" text-anchor="middle"><text x="150" y="32">inside the opening, gap all round</text><text x="480" y="32">laps the opening edge</text><text x="810" y="32">covers the cabinet edge</text></g>
+<g stroke="#5a6678" fill="rgba(90,102,120,.12)">
+<rect x="20" y="70" width="24" height="120"/><rect x="256" y="70" width="24" height="120"/>
+<rect x="350" y="70" width="24" height="120"/><rect x="586" y="70" width="24" height="120"/>
+<rect x="680" y="70" width="24" height="120"/><rect x="916" y="70" width="24" height="120"/></g>
+<g stroke="#fbbf24" fill="rgba(251,191,36,.1)">
+<rect x="48" y="70" width="204" height="22"/>
+<rect x="362" y="48" width="236" height="22"/>
+<rect x="682" y="48" width="256" height="22"/></g>
+<g stroke="#38bdf8" fill="rgba(56,189,248,.08)">
+<rect x="60" y="92" width="12" height="98"/><rect x="228" y="92" width="12" height="98"/>
+<rect x="390" y="70" width="12" height="120"/><rect x="558" y="70" width="12" height="120"/>
+<rect x="720" y="70" width="12" height="120"/><rect x="888" y="70" width="12" height="120"/></g>
+<g stroke="#5a6678" stroke-dasharray="3 3"><line x1="10" y1="70" x2="290" y2="70"/><line x1="340" y1="70" x2="620" y2="70"/><line x1="670" y1="70" x2="950" y2="70"/></g>
+<g font-family="IBM Plex Mono, monospace" font-size="9" fill="#c8d4e8">
+<text x="150" y="85" text-anchor="middle" fill="#fbbf24">face (Face thick)</text>
+<text x="66" y="206" text-anchor="middle" fill="#38bdf8">box side</text><text x="32" y="206" text-anchor="middle" fill="#5a6678">cab</text>
+<text x="150" y="140" text-anchor="middle">slides start one</text><text x="150" y="152" text-anchor="middle">face thickness back</text>
+<text x="480" y="63" text-anchor="middle" fill="#fbbf24">face</text><text x="480" y="140" text-anchor="middle">Overlap: how far it laps</text>
+<text x="810" y="63" text-anchor="middle" fill="#fbbf24">face</text><text x="810" y="140" text-anchor="middle">Short of edge: room</text><text x="810" y="152" text-anchor="middle">to the next cabinet</text></g>
+<g font-family="IBM Plex Mono, monospace" font-size="8" fill="#5a6678"><text x="292" y="74">cabinet front</text><text x="622" y="74">cabinet front</text></g>
+</svg>
+<p style="font-size:13px;color:var(--dim)">Top view, front at the top. Grey = cabinet sides, yellow = drawer face, blue = drawer box sides.</p>
+<table class="f">
+<tr><td>Face thick</td><td>The face can be thicker than the box: a 3/4" (18 mm) face on a 1/2" (12 mm) box. Sides, bottom, grooves and dividers all start behind the face, and the depth is slide length + face. Left the same as <i>Boards</i>, it follows the board thickness.</td></tr>
+<tr><td>Into the face</td><td><b>Blind tabs</b> (hidden, the default), <b>through tabs</b> (show on the face), or <b>butt</b> (no joint; glue and screw).</td></tr>
+<tr><td>Slot depth × face</td><td>How deep the blind slots go, as a part of the face thickness (0.75 = 13.5 mm into an 18 mm face).</td></tr>
+<tr><td>Position</td><td><b>Inset</b> (default) with an <b>Inset gap</b> all round (1/8"), <b>Partial overlay</b> with an <b>Overlap</b>, or <b>Full overlay</b>: type the <b>Cabinet board</b> thickness and how far the face stops <b>Short of edge</b> (1/16", so cabinets side by side have 1/8" between their faces).</td></tr>
+<tr><td>Past sides · Above · Below</td><td>Box size mode: how far the face sticks out past the box on each side, or tick <i>Same height as sides</i>.</td></tr>
+<tr><td>Reveal</td><td>Bank of drawers: the gap between the faces (1/8").</td></tr>
+</table>
+<div class="note tip"><b>Gaps above and below the box</b> (opening mode): 1/4" below for every drawer, 1" above with a face, so the face has room to cover the box and the drawer can be lifted out. Both can be changed.</div>
+<div class="note warn"><b>Inset with No slides</b> makes the face flush with the box all round (the drawer runs on the shelf).</div>
 </div>
 
 <!-- ============================== CABINET ============================== -->
@@ -238,9 +278,12 @@ as one editable item in the timeline.</p>
 <tr><td>Top</td><td>Full top panel, or two stretchers (under a counter top).</td></tr>
 <tr><td>Back</td><td>Thin panel in a groove (default 6 mm in a 6 mm deep groove), or a solid board flush with the back edges, tabbed in.</td></tr>
 <tr><td>Hanging rails</td><td>Grooved back only: a rail under the top and one on the bottom (90 mm high) to screw the cabinet to the wall.</td></tr>
-<tr><td>Front thick · Gap between</td><td>Doors and drawer fronts (18 mm) cover the carcass edges, with a gap between them (3 mm).</td></tr>
+<tr><td>Fronts</td><td>Where the doors and drawer faces sit: <b>Inset</b> (default, inside the openings with an <i>Inset gap</i>), <b>Partial overlay</b> (lap the opening edges by the <i>Overlap</i>) or <b>Full overlay</b> (cover the carcass edges). Same three as in NM Drawer; see the picture there.</td></tr>
+<tr><td>Drawer fronts</td><td><b>Box front is the face</b> (default), or a <b>separate false front</b> screwed on (always full overlay).</td></tr>
+<tr><td>Front thick · Reveal</td><td>Thickness of the doors and of the drawer faces (18 mm), so a cabinet gets 3/4" faces on 1/2" drawer boxes. Reveal: the gap between fronts (1/8").</td></tr>
+<tr><td>Slide lines</td><td>For every drawer the inside of both cabinet sides gets a shallow groove (0.5 mm deep, 1 mm high) on the centre line of the cabinet slide member, at exactly the height of the drawer's own groove, from the slide's setback (+ the face for inset faces). Screw the cabinet member on the line, the drawer member on the drawer's line, and the drawer runs level. On when the drawer preset has <i>Mark slide lines</i> (the default).</td></tr>
 <tr><td>Sections</td><td>1 to 4, top to bottom, with a fixed shelf between them. Type the height of each; the bottom one gets what is left.</td></tr>
-<tr><td>Holds</td><td><b>Drawers</b> (1–8, same or graduated, slides or none, an NM Drawer preset for the box), <b>Doors</b> (one, two, or Auto: two above 600 mm wide) or <b>Open shelves</b>.</td></tr>
+<tr><td>Holds</td><td><b>Drawers</b> (1–8, same or graduated, any of the Lee Valley slides or none, an NM Drawer preset for the box), <b>Doors</b> (one, two, or Auto: two above 600 mm wide) or <b>Open shelves</b>.</td></tr>
 <tr><td>Shelves · Adjustable</td><td>Number of shelves. Adjustable = loose shelves on 5 mm pins (32 mm hole rows); off = fixed, tabbed into the sides.</td></tr>
 <tr><td>Lay flat</td><td>A flat copy of the carcass and of each drawer, for CAM.</td></tr>
 </table>

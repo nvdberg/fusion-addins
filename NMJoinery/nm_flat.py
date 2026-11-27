@@ -64,7 +64,39 @@ def _big_face(body):
 def _move(tb, dx, dy, dz):
     t = adsk.core.Matrix3D.create()
     t.translation = adsk.core.Vector3D.create(dx, dy, dz)
-    adsk.fusion.TemporaryBRepManager.get().transform(tb, t)
+    for b in (tb if isinstance(tb, list) else [tb]):     # a board with its engraved name: moved together
+        adsk.fusion.TemporaryBRepManager.get().transform(b, t)
+
+
+def _turn(grp, m):
+    for b in grp:
+        adsk.fusion.TemporaryBRepManager.get().transform(b, m)
+
+
+def pair_names(bodies):
+    """{index of a name (wire body, NM Engrave) -> index of its board}: by name ('Left name' on 'Left', in the same
+    component), else the board whose box holds it."""
+    def key(b):
+        return b.assemblyContext.fullPathName if b.assemblyContext else ''
+    solids = [i for i, b in enumerate(bodies) if b.isSolid]
+    by_name = {(key(bodies[i]), bodies[i].name): i for i in solids}
+    out = {}
+    for i, b in enumerate(bodies):
+        if b.isSolid:
+            continue
+        j = by_name.get((key(b), b.name[:-5])) if b.name.endswith(' name') else None
+        if j is None:
+            bb = b.boundingBox
+            for k in solids:
+                c = bodies[k].boundingBox.copy()
+                c.expand(adsk.core.Point3D.create(c.minPoint.x - 0.01, c.minPoint.y - 0.01, c.minPoint.z - 0.01))
+                c.expand(adsk.core.Point3D.create(c.maxPoint.x + 0.01, c.maxPoint.y + 0.01, c.maxPoint.z + 0.01))
+                if c.contains(bb.minPoint) and c.contains(bb.maxPoint):
+                    j = k
+                    break
+        if j is not None:
+            out[i] = j
+    return out
 
 
 # ------------------------------------------------------------------------------------------------ nesting
@@ -174,13 +206,14 @@ def _mm(cm):
 
 
 def arrange(flats, o, x0, y0):
-    """Nests the flat copies (moved in place) on sheets, per thickness. Returns ([(name, sheet body)], notes)."""
+    """Nests the flat copies (moved in place) on sheets, per thickness. flats: [[board, its names...]] (the board's
+    box counts). Returns ([(name, sheet body)], notes)."""
     tbm = adsk.fusion.TemporaryBRepManager.get()
     Z = adsk.core.Vector3D.create(0, 0, 1)
     gap, m, SL, SW = o['gap'], o['margin'], o['sl'], o['sw']
     groups = {}
-    for i, tb in enumerate(flats):
-        bb = tb.boundingBox
+    for i, grp in enumerate(flats):
+        bb = grp[0].boundingBox
         t = bb.maxPoint.z - bb.minPoint.z
         groups.setdefault(round(t * 10, 1), []).append((i, bb.maxPoint.x - bb.minPoint.x, bb.maxPoint.y - bb.minPoint.y))
     pool = [[L, W, T, False] for L, W, T in o['offcuts']]
@@ -209,8 +242,8 @@ def arrange(flats, o, x0, y0):
                 if r:
                     rot = adsk.core.Matrix3D.create()
                     rot.setToRotation(math.pi / 2, Z, adsk.core.Point3D.create(0, 0, 0))
-                    tbm.transform(tb, rot)
-                bb = tb.boundingBox
+                    _turn(tb, rot)
+                bb = tb[0].boundingBox
                 used += (bb.maxPoint.x - bb.minPoint.x) * (bb.maxPoint.y - bb.minPoint.y)
                 _move(tb, x + m + px - bb.minPoint.x, y + m + py - bb.minPoint.y, -bb.minPoint.z)
             box = adsk.core.OrientedBoundingBox3D.create(adsk.core.Point3D.create(x + L / 2, y + W / 2, t / 2),
@@ -223,7 +256,7 @@ def arrange(flats, o, x0, y0):
         cur = y
         for pid in left:                        # too big for any sheet: in a row after the sheets
             tb = flats[pid]
-            bb = tb.boundingBox
+            bb = tb[0].boundingBox
             _move(tb, x - bb.minPoint.x, cur - bb.minPoint.y, -bb.minPoint.z)
             cur += bb.maxPoint.y - bb.minPoint.y + gap
         rowh = max(rowh, cur - y)
@@ -240,8 +273,10 @@ def arrange(flats, o, x0, y0):
 # ------------------------------------------------------------------------------------------------ laying flat
 def lay(bodies, gap, dx=0.0, nest=None):
     """Flat copies (TemporaryBRep bodies, world coordinates) of the bodies, in the same order, plus the sheets
-    ([(name, body)]) and notes when nested."""
+    ([(name, body)]) and notes when nested. An engraved name (wire body) gets its board's turns and moves, and that
+    board lies with the name's face up."""
     tbm = adsk.fusion.TemporaryBRepManager.get()
+    names = pair_names(bodies)
     union, per = None, {}
     for b in bodies:
         k = b.assemblyContext.fullPathName if b.assemblyContext else ''
@@ -250,17 +285,22 @@ def lay(bodies, gap, dx=0.0, nest=None):
                 per[key] = [b.boundingBox.copy(), 0]
             else:
                 per[key][0].combine(b.boundingBox)
-            per[key][1] += 1
+            if b.isSolid:
+                per[key][1] += 1
     union = per['*'][0]
     Z = adsk.core.Vector3D.create(0, 0, 1)
     X = adsk.core.Vector3D.create(1, 0, 0)
     origin = adsk.core.Point3D.create(0, 0, 0)
     x0, cursor = union.maxPoint.x + 10.0 + dx, union.minPoint.y      # dx: shift sideways (bank of drawers)
-    out = []
-    for b in bodies:
+    out = [tbm.copy(b) for b in bodies]
+    groups = []
+    for i, b in enumerate(bodies):
+        if i in names:
+            continue                                # goes with its board
         k = b.assemblyContext.fullPathName if b.assemblyContext else ''
-        tb = tbm.copy(b)
-        face = _big_face(b)
+        mine = [j for j, bi in sorted(names.items()) if bi == i]
+        grp = [out[i]] + [out[j] for j in mine]
+        face = _big_face(b) if b.isSolid else None
         if face is not None:
             n = face.geometry.normal.copy()
             n.normalize()
@@ -271,6 +311,10 @@ def lay(bodies, gap, dx=0.0, nest=None):
                 own = _vec(_centre(b.boundingBox), _centre(per[k][0])).dotProduct(n)
                 if abs(own) > 0.05:
                     to = own
+            if mine:                                # the side with the name is the one that faces up
+                side = _vec(_centre(b.boundingBox), _centre(bodies[mine[0]].boundingBox)).dotProduct(n)
+                if abs(side) > 1e-4:
+                    to = side
             if to < -1e-6:
                 n.scaleBy(-1)                       # point it at the middle of the box: that is the inside
             m = adsk.core.Matrix3D.create()
@@ -278,7 +322,7 @@ def lay(bodies, gap, dx=0.0, nest=None):
                 m.setToRotation(math.pi, X, origin)
             elif n.dotProduct(Z) < 0.999999:
                 m.setToRotateTo(n, Z)
-            tbm.transform(tb, m)
+            _turn(grp, m)
             pts = []                                  # turn about Z: smallest outline, long side along X
             for v in b.vertices:
                 q = v.geometry.copy()
@@ -303,13 +347,13 @@ def lay(bodies, gap, dx=0.0, nest=None):
             if best:
                 r = adsk.core.Matrix3D.create()
                 r.setToRotation(-best[1], Z, origin)
-                tbm.transform(tb, r)
-        bb = tb.boundingBox
-        _move(tb, x0 - bb.minPoint.x, cursor - bb.minPoint.y, -bb.minPoint.z)
+                _turn(grp, r)
+        bb = grp[0].boundingBox
+        _move(grp, x0 - bb.minPoint.x, cursor - bb.minPoint.y, -bb.minPoint.z)
         cursor += bb.maxPoint.y - bb.minPoint.y + gap
-        out.append(tb)
+        groups.append(grp)
     if nest:
-        sheets, notes = arrange(out, nest, x0, union.minPoint.y)
+        sheets, notes = arrange(groups, nest, x0, union.minPoint.y)
         return out, sheets, notes
     return out, [], []
 

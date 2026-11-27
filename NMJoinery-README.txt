@@ -1,4 +1,4 @@
-NM Joinery - Fusion add-in (version 0.8.1)
+NM Joinery - Fusion add-in (version 0.9.0)
 ==========================================
 CNC-aware box finger joints, tab & slot and mortise & tenon joints.
 Each joint is an editable feature in the timeline: double-click it to change it.
@@ -52,8 +52,18 @@ NM DRAWER (SOLID > CREATE > NM Drawer)
   these units (Units = inch: 16 means 16"); type the unit to use the other one (300mm or 17.75 in).
   Switching converts every plain size. Parameters keep what the dialog shows.
 - OK greyed out? The red line under Units says why (e.g. a size too small for the boards).
-- Options: a top (closed box), dividers in dados, a finger pull or hand hole in the front,
+- Options: a top (closed box), dividers in dados, a finger pull, hand hole or rounded top-edge notch in the front,
   a false front with screw holes, and "Lay flat" (see below).
+- Engrave part names: each board's name goes on its inside face in a built-in single-line font
+  (e.g. "KITCHEN DRAWER 2 L SIDE", shortened on small boards), 6.35 mm letters, clear of joints,
+  grooves and pulls. The letters are wire bodies (lines only, nothing is cut): in CAM use Trace or
+  Engrave on them with a 60 deg V-bit about 0.5 mm deep. They follow size changes and come along
+  on the Lay Flat copies. NM Cabinet does this for its drawers (not the carcass yet).
+- NM Name Trace (Manufacture workspace > 2D panel): one Trace for all the names. Make a milling
+  setup on the Lay Flat boards, click NM Name Trace, pick the setup, a 60 deg V-bit (from your tool
+  libraries, or the built-in 1/2" one: check its feeds) and the depth (0.5 mm). It adds the Trace
+  "Part names" and generates it. Only names lying flat and face up in that setup are used. Run it
+  again after a change: the same Trace is updated.
 - Dividers: any number front-to-back and/or left-to-right (a sorting grid). Where they cross they
   half-lap (one notched from the top, the other from the bottom) with the same corner choice as the
   joints (dogbones / T-bones). Stock 1/2" (12 mm) or 1/4" (6 mm) ply: for thin dividers the dados
@@ -66,16 +76,18 @@ NM DRAWER (SOLID > CREATE > NM Drawer)
 - Size from a cabinet opening (Size from: "Cabinet opening + slides"): type the opening width,
   height and depth and pick the slides. The box is the opening minus the slide gap on each side,
   minus the gaps above and below; its depth is the slide length (the longest one that fits the
-  opening is picked for you). Lee Valley 61080 soft-close side-mount slides are built in: 12.7 to
-  13.5 mm per side, at least 6.4 mm under the drawer, 450/500/550/600 mm, 1 13/16" high.
+  opening is picked for you). Lee Valley side-mount slides are built in: 61080 soft-close
+  (12.7 to 13.5 mm per side, at least 6.4 mm under the drawer, 450/500/550/600 mm, 1 13/16" high),
+  100 lb, 100 lb hold-out, 100 lb touch-open and 75 lb (all 12.7 to 13.5 mm per side), and
+  200 lb for heavy drawers (19.05 to 19.45 mm per side). Or "No slides".
   Slide position: "Centred on the sides" (default: top of the slide = half the box height + half
   the slide height, and it follows when the box changes) or "Typed" (Lee Valley's sheet uses
   44 mm up). The result message says where both slide members go: the drawer line up from the
   bottom of the box sides (5.2 mm back) and the cabinet line up from the opening bottom
   (= gap below + drawer line, 2 mm back). "Other side-mount" lets you type any gap. The opening sizes become parameters too (drawer_ow, ...).
   "Mark slide lines" (on by default) cuts a shallow groove, 0.5 mm deep and 1 mm high, into the
-  outside of both sides with its top edge on the drawer slide line, from the setback to as far
-  from the back. It sits under the slide, so it doesn't show; it is in the Lay Flat copy too.
+  outside of both sides on the centre line of the slide (where its screw holes are), from the
+  setback to as far from the back. It sits under the slide, so it doesn't show; it is in the Lay Flat copy too.
   Cut it with a V-bit or engraving pass, or set drawer_smw to your bit width (e.g. 6.35 mm).
 - Bank of drawers (opening mode, "Drawers" more than 1): one opening, several drawers stacked
   with nothing between them. Heights "All the same" or "Graduated" (each drawer taller than the
@@ -85,6 +97,15 @@ NM DRAWER (SOLID > CREATE > NM Drawer)
   between them (default 3 mm). Parameters: bank_* for the whole bank (bank_oh, bank_step,
   bank_t, bank_rev ...), bank_d1_*, bank_d2_* for each drawer. Change bank_oh or bank_step and
   every drawer follows. Each drawer gets its own Lay Flat copy, side by side.
+- Drawer face (Front: "Box front is the drawer face"): no separate false front; the front board is
+  made bigger and is the face you see, joined to the sides with blind tabs (hidden, slots 0.75 of
+  the face deep), through tabs or a butt joint. "Face thick" can differ from the boards, e.g. a
+  3/4" (18 mm) face on a 1/2" (12 mm) box: sides, bottom, grooves and dividers start behind the
+  face and the depth is slide length + face. In opening mode the face sits Inset (inside the
+  opening, 1/8" gap all round; the slides start one face thickness back), Partial overlay (laps
+  the opening edges by "Overlap") or Full overlay (covers the cabinet board, 1/16" short of its
+  outer edge). With a face the box is 1" lower than the opening top and 1/4" above its bottom.
+  A bank of drawers gets faces with a 1/8" reveal between them.
 - Every size becomes a design parameter with the box's name in front (e.g. drawer_w, drawer_h,
   drawer_t). Change them in Modify > Change Parameters and the whole box, joints included, follows.
 
@@ -113,7 +134,14 @@ NM CABINET (SOLID > CREATE > NM Cabinet)
                   (32 mm hole rows, 37 mm from the front and back; a loose shelf sits on the
                   nearest row).
   Type the height of every section but the bottom one; the bottom one gets what is left.
-- Doors and drawer fronts cover the carcass edges with a gap between them ("Gap between").
+- Fronts: doors and drawer faces sit Inset (default, inside the openings with a 1/8" gap),
+  Partial overlay or Full overlay, as in NM Drawer. Drawer fronts: the box front is the face
+  (default) or a separate false front (full overlay). "Front thick" (18 mm) is the thickness of
+  the doors and the drawer faces, so the drawers get 3/4" faces on 1/2" boxes.
+- Slide lines: with "Mark slide lines" on in the drawer preset (the default), the cabinet sides get
+  the partner groove on the inside (0.5 mm deep, 1 mm high), on the centre line of each cabinet
+  slide member, from its setback (+ the face for inset faces) one slide length back. It lines up
+  exactly with the groove on the drawer, follows every size change, and is in the flat copy too.
 - Every size is a parameter (<name>_w, <name>_h, <name>_d, <name>_s1 ...): change the width or
   depth in Change Parameters and the boards, drawers and fronts follow.
 - Lay flat: one flat copy of the carcass and one per drawer, side by side, for CAM.

@@ -56,6 +56,8 @@ def boards(entities):
     out, seen = [], set()
 
     def add(comp_name, body, key):
+        if not body.isSolid:                    # engraved part names (lines, no board)
+            return
         if key not in seen:
             seen.add(key)
             out.append((comp_name, body.name, body.nativeObject or body))
